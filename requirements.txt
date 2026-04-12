@@ -1,0 +1,35 @@
+# Install with:
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
+#
+# The --extra-index-url pulls torch with CUDA 12.4 support; other packages from PyPI.
+
+# Core ML
+torch>=2.0
+transformers>=4.40
+tokenizers
+
+# Topology
+ripser
+giotto-tda
+networkx
+
+# Distributional semantics
+gensim
+
+# Stats and metrics
+scikit-learn
+scipy
+numpy<2
+pandas
+
+# Visualization
+matplotlib
+seaborn
+
+# Notebooks
+jupyter
+jupyterlab
+ipykernel
+
+# Utilities
+tqdm

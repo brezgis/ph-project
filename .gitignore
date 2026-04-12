@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — too large or sensitive to commit
+data/corpora/
+data/kwic/
+data/attention/
+data/fasttext/
+*.npz
+*.npy
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+
+# Results — commit final figures and summaries, not intermediates
+results/intermediate/
+results/attention/
+results/ph_features/
+results/raw/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
