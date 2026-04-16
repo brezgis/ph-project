@@ -29,6 +29,7 @@ data/fasttext/
 *.ckpt
 *.bin
 *.safetensors
+*.vec
 
 # Results — commit final figures and summaries, not intermediates
 results/intermediate/
