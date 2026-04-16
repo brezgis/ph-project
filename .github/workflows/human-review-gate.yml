@@ -14,6 +14,9 @@ on:
 jobs:
   human-review-gate:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
     steps:
       - name: Check review gate
         env:
