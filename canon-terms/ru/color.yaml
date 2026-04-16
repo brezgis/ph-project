@@ -1,0 +1,68 @@
+domain: color
+language: ru
+description: >
+  The twelve basic color terms of Russian. Russian maps onto a 12-term
+  system because the blue region is obligatorily split into sinij (dark
+  blue) and goluboj (light blue), both of which meet Berlin & Kay's
+  criteria for basicness. This split is the central cross-linguistic
+  deviation in this study, documented by Paramei (2005), Winawer et al.
+  (2007), and Davidoff et al. (1999).
+sources:
+  - citation: "Berlin, Brent and Paul Kay. 1969. Basic Color Terms: Their Universality and Evolution. University of California Press."
+    role: anchor
+    notes: "Provides the universal framework; Russian exceeds its predicted 11-term maximum."
+  - citation: "Paramei, Galina V. 2005. Singing the Russian Blues: An Argument for Culturally Basic Color Terms. Cross-Cultural Research 39(1):10-38."
+    role: anchor
+    notes: "Argues goluboj is a culturally basic 12th term; reviews lexical-semantic and psycholinguistic evidence."
+  - citation: "Winawer, Jonathan, Nathan Witthoft, Michael C. Frank, Lisa Wu, Alex R. Wade, and Lera Boroditsky. 2007. Russian Blues Reveal Effects of Language on Color Discrimination. PNAS 104(19):7780-7785."
+    role: augmentation
+    notes: "Demonstrates that the sinij/goluboj boundary has perceptual consequences; confirms obligatory categorical distinction."
+  - citation: "Davidoff, Jules, Ian Davies, and Debi Roberson. 1999. Colour Categories in a Stone-Age Tribe. Nature 398:203-204."
+    role: augmentation
+    notes: "Cross-cultural evidence that color categories are linguistically mediated, not universal; supports treating goluboj as a genuine basic term."
+  - citation: "Kay, Paul and Luisa Maffi. 1999. Color Appearance and the Emergence and Evolution of Basic Color Lexicons. American Anthropologist 101(4):743-760."
+    role: augmentation
+    notes: "Revised evolutionary model for BCT emergence."
+terms:
+  - term: "чёрный"
+    gloss: "black"
+    source: "Berlin & Kay 1969"
+  - term: "белый"
+    gloss: "white"
+    source: "Berlin & Kay 1969"
+  - term: "красный"
+    gloss: "red"
+    source: "Berlin & Kay 1969"
+  - term: "зелёный"
+    gloss: "green"
+    source: "Berlin & Kay 1969"
+  - term: "жёлтый"
+    gloss: "yellow"
+    source: "Berlin & Kay 1969"
+  - term: "синий"
+    gloss: "dark blue"
+    source: "Paramei 2005"
+    notes: "The darker of the two Russian blue BCTs. Covers navy through medium blue."
+  - term: "голубой"
+    gloss: "light blue"
+    source: "Paramei 2005"
+    notes: "The lighter of the two Russian blue BCTs. The 12th basic term; its status as a true BCT is the key theoretical claim of Paramei 2005 and is supported by the perceptual data in Winawer et al. 2007."
+  - term: "коричневый"
+    gloss: "brown"
+    source: "Berlin & Kay 1969"
+  - term: "фиолетовый"
+    gloss: "purple"
+    source: "Berlin & Kay 1969"
+  - term: "розовый"
+    gloss: "pink"
+    source: "Berlin & Kay 1969"
+  - term: "оранжевый"
+    gloss: "orange"
+    source: "Berlin & Kay 1969"
+  - term: "серый"
+    gloss: "gray"
+    source: "Berlin & Kay 1969"
+deviations:
+  - item: "12 terms instead of 11"
+    from: "Berlin & Kay 1969 predicts a maximum of 11 BCTs at Stage VII"
+    reason: "Russian obligatorily distinguishes sinij and goluboj in the blue region. Both meet basicness criteria (monolexemic, psychologically salient, not subordinate). This is well-established in the literature (Paramei 2005, Winawer et al. 2007)."

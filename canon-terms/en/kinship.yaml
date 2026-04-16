@@ -1,0 +1,111 @@
+domain: kinship
+language: en
+description: >
+  English kinship terminology inventory for cross-linguistic comparison via
+  persistent homology on mBERT attention graphs. English uses an Eskimo-type
+  system (Murdock 1949), distinguishing lineal from collateral kin but merging
+  paternal and collateral lines. Anchored in Murdock 1949 for structural
+  typology and Greenberg 1966 for universals of kin terminology. Terms cover
+  nuclear family, grandparents/grandchildren, aunts/uncles, nieces/nephews,
+  cousins, and in-laws. English notably lacks lexicalized gender-of-spouse
+  distinctions in in-law terms (one "father-in-law" regardless of whether it
+  is husband's or wife's father) and uses gender-neutral "cousin."
+sources:
+  - citation: "Murdock, George Peter. 1949. Social Structure. Macmillan. Ch. 7."
+    role: anchor
+    notes: "Provides the six-system kinship typology; classifies English as Eskimo-type."
+  - citation: "Greenberg, Joseph H. 1966. Language Universals, with Special Reference to Feature Hierarchies. Mouton."
+    role: anchor
+    notes: "Universals of kinship terminology; markedness hierarchies for kin terms."
+  - citation: "Kronenfeld, David B. 1996. Plastic Glasses and Church Fathers. Oxford University Press."
+    role: augmentation
+    notes: "Semantic extension in kinship domains; English kin term categorization."
+terms:
+  - term: father
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: mother
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: son
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: daughter
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: brother
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: sister
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: husband
+    source: "Murdock 1949"
+    notes: "Spouse term."
+  - term: wife
+    source: "Murdock 1949"
+    notes: "Spouse term."
+  - term: grandfather
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +2. No paternal/maternal distinction."
+  - term: grandmother
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +2. No paternal/maternal distinction."
+  - term: grandson
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -2."
+  - term: granddaughter
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -2."
+  - term: uncle
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1. Eskimo-type: merges paternal and maternal."
+  - term: aunt
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1. Eskimo-type: merges paternal and maternal."
+  - term: nephew
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: niece
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: cousin
+    source: "Murdock 1949"
+    notes: "Collateral same generation. Gender-neutral — contrast with Spanish primo/prima and Russian двоюродный брат/двоюродная сестра."
+  - term: father-in-law
+    source: "Murdock 1949"
+    notes: "Spouse's father. Gender-of-spouse neutral — contrast with Russian свёкор (husband's father) vs. тесть (wife's father)."
+  - term: mother-in-law
+    source: "Murdock 1949"
+    notes: "Spouse's mother. Gender-of-spouse neutral — contrast with Russian свекровь vs. тёща."
+  - term: son-in-law
+    source: "Murdock 1949"
+    notes: "Daughter's husband."
+  - term: daughter-in-law
+    source: "Murdock 1949"
+    notes: "Son's wife."
+  - term: brother-in-law
+    source: "Greenberg 1966"
+    notes: "Covers both spouse's brother and sibling's husband. Polysemous."
+  - term: sister-in-law
+    source: "Greenberg 1966"
+    notes: "Covers both spouse's sister and sibling's wife. Polysemous."
+  - term: stepfather
+    source: "Kronenfeld 1996"
+    notes: "Parent's husband who is not biological father."
+  - term: stepmother
+    source: "Kronenfeld 1996"
+    notes: "Parent's wife who is not biological mother."
+  - term: stepson
+    source: "Kronenfeld 1996"
+    notes: "Spouse's son from prior relationship."
+  - term: stepdaughter
+    source: "Kronenfeld 1996"
+    notes: "Spouse's daughter from prior relationship."
+deviations:
+  - item: "step-relations included"
+    from: "Murdock 1949 does not systematically cover step-relations in his typology"
+    reason: "Step-relations are core English kinship vocabulary and present in all three languages; needed for balanced comparison."
+  - item: "great-grandparent/great-grandchild terms omitted"
+    from: "These exist in English (great-grandfather etc.)"
+    reason: "Compositional multi-word forms with low corpus frequency; would add noise without adding typological signal."

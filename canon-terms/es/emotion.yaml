@@ -1,0 +1,121 @@
+domain: emotion
+language: es
+description: >
+  Spanish emotion inventory combining Ekman-equivalent basic emotions with
+  culturally-specific terms from the Spanish affective lexicon. The key
+  deviation is duende, drawn from García Lorca's 1933 lecture, which names an
+  aesthetic-emotional state with no equivalent in English or Russian. The list
+  also includes cariño (affectionate warmth, broader than English 'love'),
+  añoranza (homesickness-as-emotion), and ilusión (hopeful excitement), all of
+  which encode culturally-specific emotional configurations.
+sources:
+  - citation: "Ekman, Paul. 1992. An argument for basic emotions. Cognition and Emotion 6(3-4): 169-200."
+    role: anchor
+    notes: "Provides the six-emotion comparability spine."
+  - citation: "Ekman, Paul. 1999. Basic emotions. In T. Dalgleish & M. Power (Eds.), Handbook of Cognition and Emotion. Wiley."
+    role: augmentation
+    notes: "Adds contempt as a seventh basic emotion; cited for desprecio."
+  - citation: "García Lorca, Federico. 1933. Juego y teoría del duende. Lecture delivered in Buenos Aires."
+    role: anchor
+    notes: "Classical reference for duende as aesthetic-emotional concept. Lorca contrasts duende with the Angel and the Muse."
+  - citation: "Maurer, Christopher (ed. and trans.). 2004. In Search of Duende. New Directions."
+    role: augmentation
+    notes: "English translation and scholarly framing of Lorca's duende lecture. Maurer isolates four elements: irrationality, earthiness, awareness of death, the diabolical."
+  - citation: "Wierzbicka, Anna. 1999. Emotions across Languages and Cultures: Diversity and Universals. Cambridge University Press."
+    role: augmentation
+    notes: "Cross-linguistic emotion framework; motivates comparison of Spanish terms against NSM universals."
+  - citation: "Goddard, Cliff and Anna Wierzbicka (eds). 2002. Meaning and Universal Grammar: Theory and Empirical Findings. 2 vols. Amsterdam: John Benjamins."
+    role: augmentation
+    notes: "NSM framework applied to multiple languages including Spanish emotion vocabulary."
+terms:
+  # Ekman-equivalent basics
+  - term: ira
+    gloss: "anger"
+    source: "Ekman 1992"
+    notes: "Literary/formal register. Enfado and enojo are more colloquial but ira is the unmarked term in affective lexicography."
+  - term: asco
+    gloss: "disgust"
+    source: "Ekman 1992"
+  - term: miedo
+    gloss: "fear"
+    source: "Ekman 1992"
+  - term: alegría
+    gloss: "joy, happiness"
+    source: "Ekman 1992"
+    notes: "Maps to Ekman's happiness. Semantically closer to 'joy' than to 'happiness'; compare Russian радость."
+  - term: tristeza
+    gloss: "sadness"
+    source: "Ekman 1992"
+  - term: sorpresa
+    gloss: "surprise"
+    source: "Ekman 1992"
+  - term: desprecio
+    gloss: "contempt"
+    source: "Ekman 1999"
+  # Culturally-specific items
+  - term: duende
+    gloss: "aesthetic-emotional intensity (untranslatable)"
+    source: "García Lorca 1933"
+    notes: "The anchor deviation for this inventory. Lorca describes duende as a telluric, dark creative force tied to awareness of death. Not an emotion in the Ekman sense — closer to an aesthetic mode of being. Included because it names something Spanish culture lexicalizes that English and Russian do not."
+  - term: cariño
+    gloss: "affection, warmth, tenderness"
+    source: "Wierzbicka 1999"
+    notes: "Broader than English 'love' — used for family, friends, romantic partners, even objects. Functions as both emotion noun and term of address."
+  - term: añoranza
+    gloss: "homesickness, nostalgic longing"
+    source: "Wierzbicka 1999"
+    notes: "Parallels Russian тоска по родине but lexicalized as a single word. Stronger than English 'nostalgia'."
+  - term: ilusión
+    gloss: "hopeful excitement, positive anticipation"
+    source: "Goddard & Wierzbicka 2002"
+    notes: "False friend with English 'illusion'. Me hace ilusión = 'I'm excited about it'. No single English equivalent."
+  - term: vergüenza
+    gloss: "shame, embarrassment"
+    source: "Wierzbicka 1999"
+    notes: "Covers both shame and embarrassment (which English distinguishes). Vergüenza ajena (secondhand embarrassment) is a productive construction."
+  - term: amor
+    gloss: "love"
+    source: "Wierzbicka 1999"
+    notes: "Compare cariño; amor is more intense/romantic while cariño is warmer/more everyday."
+  - term: culpa
+    gloss: "guilt"
+    source: "Ekman 1992"
+  - term: orgullo
+    gloss: "pride"
+    source: "Wierzbicka 1999"
+  - term: envidia
+    gloss: "envy"
+    source: "Wierzbicka 1999"
+  - term: celos
+    gloss: "jealousy"
+    source: "Wierzbicka 1999"
+  - term: esperanza
+    gloss: "hope"
+    source: "Wierzbicka 1999"
+    notes: "Compare ilusión; esperanza is more sober/enduring, ilusión more bubbly/immediate."
+  - term: nostalgia
+    gloss: "nostalgia"
+    source: "Wierzbicka 1999"
+    notes: "Overlaps with añoranza but lacks the specificity of homesickness. Both included for topology structure."
+  - term: angustia
+    gloss: "anguish, existential anxiety"
+    source: "Wierzbicka 1999"
+    notes: "Parallels Russian тревога; more visceral than English 'anxiety'."
+  - term: ternura
+    gloss: "tenderness"
+    source: "Wierzbicka 1999"
+    notes: "Overlaps with cariño but names the feeling itself rather than the relational warmth."
+  - term: pena
+    gloss: "sorrow, grief, pity"
+    source: "Wierzbicka 1999"
+    notes: "Polysemous: can mean grief (dar pena), punishment (pena de muerte), or embarrassment (me da pena) depending on region."
+deviations:
+  - item: "duende included as emotion term"
+    from: "Ekman's model; standard emotion taxonomies"
+    reason: "duende is not a basic emotion in any standard taxonomy, but it names a culturally-specific affective state that Spanish lexicalizes and other languages do not. This is precisely the kind of deviation that justifies a cross-linguistic topology study."
+  - item: "Both nostalgia and añoranza included"
+    from: "Could be collapsed into one sadness-adjacent category"
+    reason: "They occupy different positions in the Spanish affective space — añoranza is specifically about absence/distance, nostalgia about the past. The distinction may show up in attention topology."
+  - item: "ilusión included as emotion"
+    from: "Not in any basic-emotion taxonomy"
+    reason: "Goddard & Wierzbicka (2002) discuss ilusión as a Spanish-specific emotion concept with no English equivalent. Key test case for cross-linguistic difference."

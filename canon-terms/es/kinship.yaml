@@ -1,0 +1,172 @@
+domain: kinship
+language: es
+description: >
+  Spanish kinship terminology inventory for cross-linguistic comparison via
+  persistent homology on mBERT attention graphs. Spanish uses an Eskimo-type
+  system (Murdock 1949) with consistent grammatical gender marking across
+  nearly all kin terms. Key typological signals: gendered cousin split
+  (primo/prima vs. English gender-neutral "cousin"), lexicalized consuegro/a
+  (child's parent-in-law — no English equivalent), and yerno/nuera distinction
+  for child's spouse (English has this too but Spanish nuera is etymologically
+  distinct, not derived from yerno). Cuñado/cuñada covers both spouse's
+  sibling and sibling's spouse (same polysemy as English "brother/sister-in-law").
+sources:
+  - citation: "Murdock, George Peter. 1949. Social Structure. Macmillan. Ch. 7."
+    role: anchor
+    notes: "Six-system kinship typology; classifies Spanish as Eskimo-type."
+  - citation: "Greenberg, Joseph H. 1966. Language Universals, with Special Reference to Feature Hierarchies. Mouton."
+    role: anchor
+    notes: "Universals of kinship terminology; markedness hierarchies."
+  - citation: "Kronenfeld, David B. 1996. Plastic Glasses and Church Fathers. Oxford University Press."
+    role: augmentation
+    notes: "Semantic extension theory; cross-linguistic kin term categorization."
+  - citation: "Real Academia Española. Diccionario de la lengua española. 23rd ed. 2014."
+    role: augmentation
+    notes: "Standard authority for Spanish lexical definitions; confirms consuegro, concuñado entries."
+terms:
+  # Nuclear family
+  - term: padre
+    gloss: father
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: madre
+    gloss: mother
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: hijo
+    gloss: son
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: hija
+    gloss: daughter
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: hermano
+    gloss: brother
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: hermana
+    gloss: sister
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: esposo
+    gloss: husband
+    source: "Murdock 1949"
+    notes: "Formal spouse term. Marido is also standard but esposo is more neutral in register."
+  - term: esposa
+    gloss: wife
+    source: "Murdock 1949"
+    notes: "Formal spouse term. Mujer is colloquial alternative."
+  # Grandparents / grandchildren
+  - term: abuelo
+    gloss: grandfather
+    source: "Murdock 1949"
+    notes: "Ascending generation +2."
+  - term: abuela
+    gloss: grandmother
+    source: "Murdock 1949"
+    notes: "Ascending generation +2."
+  - term: nieto
+    gloss: grandson
+    source: "Murdock 1949"
+    notes: "Descending generation -2."
+  - term: nieta
+    gloss: granddaughter
+    source: "Murdock 1949"
+    notes: "Descending generation -2."
+  # Collateral consanguineal
+  - term: tío
+    gloss: uncle
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1. Eskimo-type: no paternal/maternal distinction."
+  - term: tía
+    gloss: aunt
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1."
+  - term: sobrino
+    gloss: nephew
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: sobrina
+    gloss: niece
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: primo
+    gloss: male cousin
+    source: "Greenberg 1966"
+    notes: "Gendered cousin split — contrast with English gender-neutral 'cousin.' Same generation collateral."
+  - term: prima
+    gloss: female cousin
+    source: "Greenberg 1966"
+    notes: "Gendered cousin split."
+  # Affinal: spouse's parents
+  - term: suegro
+    gloss: father-in-law
+    source: "Murdock 1949"
+    notes: "Spouse's father. Gender-of-spouse neutral like English, unlike Russian свёкор/тесть."
+  - term: suegra
+    gloss: mother-in-law
+    source: "Murdock 1949"
+    notes: "Spouse's mother. Gender-of-spouse neutral like English, unlike Russian свекровь/тёща."
+  # Affinal: child's spouse
+  - term: yerno
+    gloss: son-in-law
+    source: "Murdock 1949"
+    notes: "Daughter's husband. From Latin generum."
+  - term: nuera
+    gloss: daughter-in-law
+    source: "Murdock 1949"
+    notes: "Son's wife. From Latin nurus — etymologically independent of yerno, not a feminization."
+  # Affinal: spouse's siblings / sibling's spouse
+  - term: cuñado
+    gloss: brother-in-law
+    source: "Greenberg 1966"
+    notes: "Polysemous: covers spouse's brother AND sibling's husband. From Latin cognatus."
+  - term: cuñada
+    gloss: sister-in-law
+    source: "Greenberg 1966"
+    notes: "Polysemous: covers spouse's sister AND sibling's wife."
+  # Affinal: extended (SPANISH-SPECIFIC LEXICALIZATIONS)
+  - term: consuegro
+    gloss: child's father-in-law
+    source: "Real Academia Española 2014"
+    notes: "No English single-word equivalent. Parent-in-law of one's child. From Vulgar Latin consocrus."
+  - term: consuegra
+    gloss: child's mother-in-law
+    source: "Real Academia Española 2014"
+    notes: "No English single-word equivalent."
+  - term: concuñado
+    gloss: spouse of spouse's sibling
+    source: "Real Academia Española 2014"
+    notes: "No English single-word equivalent. Sometimes shortened to concuño in Latin America."
+  - term: concuñada
+    gloss: female spouse of spouse's sibling
+    source: "Real Academia Española 2014"
+    notes: "Feminine form of concuñado."
+  # Step-relations
+  - term: padrastro
+    gloss: stepfather
+    source: "Kronenfeld 1996"
+    notes: "Parent's husband who is not biological father."
+  - term: madrastra
+    gloss: stepmother
+    source: "Kronenfeld 1996"
+    notes: "Parent's wife who is not biological mother."
+  - term: hijastro
+    gloss: stepson
+    source: "Kronenfeld 1996"
+    notes: "Spouse's son from prior relationship."
+  - term: hijastra
+    gloss: stepdaughter
+    source: "Kronenfeld 1996"
+    notes: "Spouse's daughter from prior relationship."
+deviations:
+  - item: "esposo/esposa chosen over marido/mujer"
+    from: "Both pairs are standard in Spanish"
+    reason: "Esposo/esposa is more register-neutral; marido and mujer have colloquial connotations that could affect distributional patterns."
+  - item: "consuegro/a and concuñado/a included despite low frequency"
+    from: "These are not in Murdock's core typology"
+    reason: "They are lexicalized Spanish-specific terms with no English equivalent — exactly the kind of granular difference persistent homology might detect."
+  - item: "bisabuelo/bisabuela (great-grandparent) omitted"
+    from: "These exist in standard Spanish"
+    reason: "Compositional prefix forms with low corpus frequency; omitted for consistency with English list."

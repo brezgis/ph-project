@@ -1,0 +1,75 @@
+domain: emotion
+language: en
+description: >
+  English emotion inventory anchored in Ekman's (1992) six basic emotions,
+  augmented with higher-order social and moral emotions drawn from the broader
+  affect literature. These serve as the English-language baseline for
+  cross-linguistic comparison. Because Ekman's model is itself English-anchored,
+  this list doubles as the comparability spine — deviations in Russian and
+  Spanish are measured against these categories.
+sources:
+  - citation: "Ekman, Paul. 1992. An argument for basic emotions. Cognition and Emotion 6(3-4): 169-200."
+    role: anchor
+    notes: "Provides the six basic emotions: anger, disgust, fear, happiness, sadness, surprise."
+  - citation: "Wierzbicka, Anna. 1999. Emotions across Languages and Cultures: Diversity and Universals. Cambridge University Press."
+    role: augmentation
+    notes: "Cross-linguistic critique of English emotion categories; motivates inclusion of culture-specific items in other languages."
+  - citation: "Ekman, Paul. 1999. Basic emotions. In T. Dalgleish & M. Power (Eds.), Handbook of Cognition and Emotion. Wiley."
+    role: augmentation
+    notes: "Extended list beyond the original six; adds contempt."
+terms:
+  # Ekman basics
+  - term: anger
+    source: "Ekman 1992"
+  - term: disgust
+    source: "Ekman 1992"
+  - term: fear
+    source: "Ekman 1992"
+  - term: happiness
+    source: "Ekman 1992"
+    notes: "Ekman uses 'happiness'; 'joy' treated as near-synonym, not listed separately."
+  - term: sadness
+    source: "Ekman 1992"
+  - term: surprise
+    source: "Ekman 1992"
+  - term: contempt
+    source: "Ekman 1999"
+    notes: "Added as seventh basic emotion in Ekman's later work."
+  # Higher-order / social / moral emotions
+  - term: love
+    source: "Wierzbicka 1999"
+    notes: "Wierzbicka treats as a universal candidate; included for cross-linguistic comparison with Russian любовь and Spanish amor/cariño."
+  - term: shame
+    source: "Ekman 1992"
+    notes: "Ekman lists among candidates beyond the core six (p. 175)."
+  - term: guilt
+    source: "Ekman 1992"
+    notes: "Listed by Ekman as candidate basic emotion (p. 175)."
+  - term: pride
+    source: "Ekman 1992"
+    notes: "Candidate basic emotion in Ekman's extended list."
+  - term: jealousy
+    source: "Wierzbicka 1999"
+    notes: "Included for structural comparison; no direct Ekman basic-emotion status."
+  - term: envy
+    source: "Wierzbicka 1999"
+    notes: "Distinguished from jealousy in English; compare Spanish envidia."
+  - term: hope
+    source: "Wierzbicka 1999"
+    notes: "NSM-analyzable emotion concept; compare Spanish esperanza/ilusión."
+  - term: pity
+    source: "Wierzbicka 1999"
+    notes: "English pity lacks the warmth of Russian жалость; the gap is analytically interesting."
+  - term: longing
+    source: "Wierzbicka 1999"
+    notes: "Nearest English approximation to тоска and añoranza; Wierzbicka argues it is not equivalent."
+  - term: anxiety
+    source: "Ekman 1992"
+    notes: "Candidate emotion in Ekman's extended discussion; compare Russian тревога."
+  - term: joy
+    source: "Wierzbicka 1999"
+    notes: "Distinguished from happiness in intensity/spontaneity; compare Russian радость."
+deviations:
+  - item: "joy included alongside happiness"
+    from: "Ekman 1992 treats happiness as the basic; joy is a variant"
+    reason: "Russian радость maps more closely to joy than happiness; needed for alignment."

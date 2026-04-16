@@ -1,0 +1,111 @@
+domain: emotion
+language: ru
+description: >
+  Russian emotion inventory combining Ekman-equivalent basic emotions (for
+  cross-linguistic comparability) with culturally-specific emotion concepts
+  analyzed by Wierzbicka (1992, 1999) and Apresjan & Apresjan (2000). The
+  centerpiece deviation is тоска, which Wierzbicka treats as a paradigm case
+  of an untranslatable emotion concept — not reducible to any single English
+  term. The list also includes жалость (compassionate pity), совесть
+  (conscience-as-felt-emotion), and тревога (a more existential anxiety than
+  English 'worry'), all of which Wierzbicka argues reflect distinctive Russian
+  cultural scripts around emotional life.
+sources:
+  - citation: "Wierzbicka, Anna. 1999. Emotions across Languages and Cultures: Diversity and Universals. Cambridge University Press."
+    role: anchor
+    notes: "Primary source for тоска, грусть, жалость, and the cross-linguistic framing. Ch. 2 (pp. 38-45) compares sadness in English and Russian; Ch. 5 (pp. 216-234) covers Russian emotional expression."
+  - citation: "Wierzbicka, Anna. 1992. Semantics, Culture, and Cognition: Universal Human Concepts in Culture-Specific Configurations. Oxford University Press."
+    role: anchor
+    notes: "NSM analysis of Russian душа (soul) and related emotion concepts including совесть. Pp. viii + 487."
+  - citation: "Apresjan, V. & Apresjan, J. 2000. Metaphor in the semantic representation of emotions. Ch. 7 in J. Apresjan, Systematic Lexicography. Oxford University Press."
+    role: augmentation
+    notes: "Emotion metaphor analysis; originally published as 'Metafora v semanticheskom predstavlenii emotsii' in Voprosy iazykoznaniia 3 (1993)."
+  - citation: "Ekman, Paul. 1992. An argument for basic emotions. Cognition and Emotion 6(3-4): 169-200."
+    role: augmentation
+    notes: "Provides the cross-linguistic comparability spine; Russian equivalents mapped to Ekman's six."
+  - citation: "Pavlenko, Aneta. 2005. Emotions and Multilingualism. Cambridge University Press."
+    role: augmentation
+    notes: "Russian-English bilingual emotion conceptualization; supports distinctiveness of Russian emotion categories."
+terms:
+  # Ekman-equivalent basics
+  - term: гнев
+    gloss: "anger"
+    source: "Ekman 1992"
+    notes: "Maps to Ekman's anger. Russian also has злость (more colloquial) and ярость (rage); гнев is the unmarked literary form."
+  - term: отвращение
+    gloss: "disgust"
+    source: "Ekman 1992"
+  - term: страх
+    gloss: "fear"
+    source: "Ekman 1992"
+  - term: радость
+    gloss: "joy"
+    source: "Ekman 1992"
+    notes: "Maps to Ekman's happiness, but semantically closer to English 'joy' than 'happiness'. Wierzbicka 1999 discusses this asymmetry."
+  - term: печаль
+    gloss: "sadness, sorrow"
+    source: "Wierzbicka 1999"
+    notes: "More literary/elevated register than грусть. Wierzbicka analyzes both."
+  - term: грусть
+    gloss: "sadness, melancholy"
+    source: "Wierzbicka 1999"
+    notes: "Wierzbicka (1999, Ch. 2) distinguishes грусть from печаль: грусть is lighter, more reflective, sometimes positively valued in Russian culture."
+  - term: удивление
+    gloss: "surprise"
+    source: "Ekman 1992"
+  # Culturally-specific items
+  - term: тоска
+    gloss: "melancholy-cum-yearning (untranslatable)"
+    source: "Wierzbicka 1999"
+    notes: "The anchor deviation for this inventory. Wierzbicka defines тоска as 'how one feels when one wants some things to happen and knows that they cannot happen.' Not reducible to sadness, longing, or nostalgia. See also Wierzbicka 1992."
+  - term: жалость
+    gloss: "compassionate pity"
+    source: "Wierzbicka 1999"
+    notes: "Unlike English 'pity', жалость carries warmth and affection. Wierzbicka argues it reflects a Russian cultural script of emotional closeness through shared suffering."
+  - term: совесть
+    gloss: "conscience (as felt emotion)"
+    source: "Wierzbicka 1992"
+    notes: "Treated as an emotion in Russian, not merely a moral faculty. Wierzbicka 1992 discusses it alongside душа as a key Russian cultural concept."
+  - term: тревога
+    gloss: "anxiety, alarm"
+    source: "Wierzbicka 1999"
+    notes: "More existential than English 'worry'; closer to German Angst. Compare English anxiety."
+  - term: стыд
+    gloss: "shame"
+    source: "Wierzbicka 1999"
+    notes: "Maps to English shame; included for cross-linguistic comparability."
+  - term: вина
+    gloss: "guilt"
+    source: "Wierzbicka 1999"
+    notes: "Maps to English guilt."
+  - term: любовь
+    gloss: "love"
+    source: "Wierzbicka 1999"
+    notes: "Universal candidate in Wierzbicka's framework."
+  - term: зависть
+    gloss: "envy"
+    source: "Apresjan & Apresjan 2000"
+    notes: "Apresjan & Apresjan discuss the metaphorical structure of зависть."
+  - term: надежда
+    gloss: "hope"
+    source: "Wierzbicka 1999"
+  - term: гордость
+    gloss: "pride"
+    source: "Wierzbicka 1999"
+  - term: ревность
+    gloss: "jealousy"
+    source: "Wierzbicka 1999"
+  - term: тоскa по родине
+    gloss: "homesickness"
+    source: "Wierzbicka 1999"
+    notes: "Multi-word; head word тоска. Included to parallel Spanish añoranza. The construction тоска по + dative is productive."
+deviations:
+  - item: "Both грусть and печаль included for 'sadness'"
+    from: "Ekman's model has a single sadness category"
+    reason: "Wierzbicka (1999, Ch. 2) argues Russian lexicalizes two distinct sadness concepts that English collapses. Both are needed for topology comparison."
+  - item: "совесть included as emotion"
+    from: "English categorizes conscience as a moral faculty, not an emotion"
+    reason: "Wierzbicka (1992) demonstrates that совесть functions as a felt emotional state in Russian discourse, not merely a cognitive judgment."
+  - item: "тоска по родине as multi-word term"
+    from: "Schema prefers single lexemes"
+    reason: "тоска alone is already listed; this construction parallels Spanish añoranza and is needed for the homesickness comparison."
