@@ -1,0 +1,60 @@
+domain: color
+language: es
+description: >
+  The eleven basic color terms of Spanish, following Berlin & Kay (1969)
+  as confirmed by Lillo et al. (2018) for Castilian Spanish. Spanish maps
+  cleanly onto the 11-term Stage VII system. Where regional variants exist
+  (marron/cafe, morado/violeta/purpura, rosa/rosado), a single canonical
+  Castilian form is chosen; variants are noted.
+sources:
+  - citation: "Berlin, Brent and Paul Kay. 1969. Basic Color Terms: Their Universality and Evolution. University of California Press."
+    role: anchor
+    notes: "Defines the 11-term Stage VII framework."
+  - citation: "Lillo, Julio, Humberto Moreira, Lilia Rosalia Prado-Leon, and Anna Melnikova. 2018. Basic Color Terms (BCTs) and Categories (BCCs) in Three Dialects of the Spanish Language. Frontiers in Psychology 9:761."
+    role: augmentation
+    notes: "Confirms 11 BCTs for Castilian, Mexican, and Uruguayan Spanish; documents dialectal variation in brown (marron vs cafe), purple (morado vs violeta), and other terms."
+  - citation: "Kay, Paul and Luisa Maffi. 1999. Color Appearance and the Emergence and Evolution of Basic Color Lexicons. American Anthropologist 101(4):743-760."
+    role: augmentation
+    notes: "Revised evolutionary model for BCT systems."
+terms:
+  - term: "negro"
+    gloss: "black"
+    source: "Berlin & Kay 1969"
+  - term: "blanco"
+    gloss: "white"
+    source: "Berlin & Kay 1969"
+  - term: "rojo"
+    gloss: "red"
+    source: "Berlin & Kay 1969"
+  - term: "verde"
+    gloss: "green"
+    source: "Berlin & Kay 1969"
+  - term: "amarillo"
+    gloss: "yellow"
+    source: "Berlin & Kay 1969"
+  - term: "azul"
+    gloss: "blue"
+    source: "Berlin & Kay 1969"
+    notes: "Spanish does not obligatorily split the blue region, unlike Russian. Azul celeste (sky blue) exists but is not basic."
+  - term: "marrón"
+    gloss: "brown"
+    source: "Lillo et al. 2018"
+    notes: "Canonical for Castilian Spanish. In Mexican Spanish, cafe is the dominant term (Lillo et al. 2018). Both are basic in their respective dialects."
+  - term: "morado"
+    gloss: "purple"
+    source: "Lillo et al. 2018"
+    notes: "Canonical for Castilian and Mexican Spanish. Uruguayan Spanish prefers violeta. Purpura exists but is literary/rare in everyday use."
+  - term: "rosa"
+    gloss: "pink"
+    source: "Lillo et al. 2018"
+    notes: "Invariable form (does not inflect for gender). Rosado/rosada is used adjectivally in some dialects but rosa is the basic term."
+  - term: "naranja"
+    gloss: "orange"
+    source: "Berlin & Kay 1969"
+  - term: "gris"
+    gloss: "gray"
+    source: "Berlin & Kay 1969"
+deviations:
+  - item: "Canonical forms chosen from Castilian dialect"
+    from: "Spanish has dialectal variation in brown, purple, and pink terms"
+    reason: "Lillo et al. 2018 documents the variation. We select Castilian forms (marron, morado, rosa) as canonical because mBERT's Spanish training data skews toward European Spanish. Variants are noted in individual term entries."

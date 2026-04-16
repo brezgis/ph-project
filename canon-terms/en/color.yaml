@@ -1,0 +1,50 @@
+domain: color
+language: en
+description: >
+  The eleven Berlin & Kay (1969) Stage VII basic color terms for English.
+  These are the maximal set of basic color terms predicted by their
+  evolutionary sequence. No non-basic terms are added; the inventory is
+  kept minimal to serve as the cross-linguistic baseline against which
+  Russian (12 BCTs) and Spanish (11 BCTs with lexical variants) are compared.
+sources:
+  - citation: "Berlin, Brent and Paul Kay. 1969. Basic Color Terms: Their Universality and Evolution. University of California Press. Ch. 2, pp. 1-34."
+    role: anchor
+    notes: "Defines the 11-term Stage VII inventory and the criteria for basicness."
+  - citation: "Kay, Paul and Luisa Maffi. 1999. Color Appearance and the Emergence and Evolution of Basic Color Lexicons. American Anthropologist 101(4):743-760."
+    role: augmentation
+    notes: "Revised evolutionary model; confirms the Stage VII endpoint of 11 BCTs."
+terms:
+  - term: "black"
+    source: "Berlin & Kay 1969"
+    notes: "Stage I term (with white)."
+  - term: "white"
+    source: "Berlin & Kay 1969"
+    notes: "Stage I term (with black)."
+  - term: "red"
+    source: "Berlin & Kay 1969"
+    notes: "Stage II term."
+  - term: "green"
+    source: "Berlin & Kay 1969"
+    notes: "Stage III-IV term."
+  - term: "yellow"
+    source: "Berlin & Kay 1969"
+    notes: "Stage III-IV term."
+  - term: "blue"
+    source: "Berlin & Kay 1969"
+    notes: "Stage V term."
+  - term: "brown"
+    source: "Berlin & Kay 1969"
+    notes: "Stage VI term."
+  - term: "purple"
+    source: "Berlin & Kay 1969"
+    notes: "Stage VII term."
+  - term: "pink"
+    source: "Berlin & Kay 1969"
+    notes: "Stage VII term."
+  - term: "orange"
+    source: "Berlin & Kay 1969"
+    notes: "Stage VII term."
+  - term: "gray"
+    source: "Berlin & Kay 1969"
+    notes: "Stage VII term."
+deviations: []

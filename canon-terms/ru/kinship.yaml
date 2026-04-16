@@ -1,0 +1,180 @@
+domain: kinship
+language: ru
+description: >
+  Russian kinship terminology inventory for cross-linguistic comparison via
+  persistent homology on mBERT attention graphs. Russian uses an Eskimo-type
+  system (Murdock 1949) but retains a rich set of lexicalized affinal (in-law)
+  distinctions that English and Spanish lack. Anchored in Murdock 1949 for
+  typology, Friedrich 1964 for Russian-specific affinal terminology, and
+  Greenberg 1966 for universals. Key typological signal: Russian lexicalizes
+  husband's-side vs. wife's-side in-law distinctions (свёкор/тесть,
+  свекровь/тёща, деверь/шурин, золовка/свояченица) that English collapses
+  into single terms. Cousin is expressed as двоюродный брат / двоюродная
+  сестра (gendered, multi-word, compositional).
+sources:
+  - citation: "Murdock, George Peter. 1949. Social Structure. Macmillan. Ch. 7."
+    role: anchor
+    notes: "Six-system kinship typology; classifies Russian as Eskimo-type."
+  - citation: "Friedrich, Paul. 1964. Semantic Structure and Social Structure: An Instance from Russian. In Goodenough (ed.), Explorations in Cultural Anthropology. McGraw-Hill."
+    role: anchor
+    notes: "Detailed inventory of Russian affinal terms and their social-structural correlates."
+  - citation: "Greenberg, Joseph H. 1966. Language Universals, with Special Reference to Feature Hierarchies. Mouton."
+    role: anchor
+    notes: "Universals of kinship terminology; markedness hierarchies."
+  - citation: "Kronenfeld, David B. 1996. Plastic Glasses and Church Fathers. Oxford University Press."
+    role: augmentation
+    notes: "Semantic extension theory applied to kinship categorization."
+terms:
+  # Nuclear family
+  - term: отец
+    gloss: father
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: мать
+    gloss: mother
+    source: "Murdock 1949"
+    notes: "Lineal, ascending generation +1."
+  - term: сын
+    gloss: son
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: дочь
+    gloss: daughter
+    source: "Murdock 1949"
+    notes: "Lineal, descending generation -1."
+  - term: брат
+    gloss: brother
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: сестра
+    gloss: sister
+    source: "Murdock 1949"
+    notes: "Sibling, same generation."
+  - term: муж
+    gloss: husband
+    source: "Murdock 1949"
+    notes: "Spouse term."
+  - term: жена
+    gloss: wife
+    source: "Murdock 1949"
+    notes: "Spouse term."
+  # Grandparents / grandchildren
+  - term: дедушка
+    gloss: grandfather
+    source: "Murdock 1949"
+    notes: "Ascending generation +2. Standard form; дед is the root."
+  - term: бабушка
+    gloss: grandmother
+    source: "Murdock 1949"
+    notes: "Ascending generation +2."
+  - term: внук
+    gloss: grandson
+    source: "Murdock 1949"
+    notes: "Descending generation -2."
+  - term: внучка
+    gloss: granddaughter
+    source: "Murdock 1949"
+    notes: "Descending generation -2."
+  # Collateral consanguineal
+  - term: дядя
+    gloss: uncle
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1. Eskimo-type: no lexicalized paternal/maternal distinction. 'Дядя по отцу' / 'дядя по матери' are descriptive, not separate lexemes."
+  - term: тётя
+    gloss: aunt
+    source: "Murdock 1949"
+    notes: "Collateral ascending +1. Same merging as дядя."
+  - term: племянник
+    gloss: nephew
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: племянница
+    gloss: niece
+    source: "Greenberg 1966"
+    notes: "Collateral descending -1."
+  - term: двоюродный брат
+    gloss: male cousin
+    source: "Greenberg 1966"
+    notes: "Literally 'second-degree brother.' Multi-word canonical form; кузен exists as a French loan but is markedly literary/archaic."
+  - term: двоюродная сестра
+    gloss: female cousin
+    source: "Greenberg 1966"
+    notes: "Literally 'second-degree sister.' Gendered — contrast with English gender-neutral 'cousin.'"
+  # Affinal: spouse's parents (KEY LEXICALIZATION)
+  - term: свёкор
+    gloss: husband's father
+    source: "Friedrich 1964"
+    notes: "Lexicalized distinction English lacks. English 'father-in-law' is gender-of-spouse neutral."
+  - term: свекровь
+    gloss: husband's mother
+    source: "Friedrich 1964"
+    notes: "Lexicalized distinction English lacks."
+  - term: тесть
+    gloss: wife's father
+    source: "Friedrich 1964"
+    notes: "Lexicalized distinction English lacks."
+  - term: тёща
+    gloss: wife's mother
+    source: "Friedrich 1964"
+    notes: "Lexicalized distinction English lacks. Culturally salient — rich folklore associations."
+  # Affinal: spouse's siblings (KEY LEXICALIZATION)
+  - term: деверь
+    gloss: husband's brother
+    source: "Friedrich 1964"
+    notes: "English collapses this into 'brother-in-law.'"
+  - term: золовка
+    gloss: husband's sister
+    source: "Friedrich 1964"
+    notes: "English collapses this into 'sister-in-law.'"
+  - term: шурин
+    gloss: wife's brother
+    source: "Friedrich 1964"
+    notes: "English collapses this into 'brother-in-law.'"
+  - term: свояченица
+    gloss: wife's sister
+    source: "Friedrich 1964"
+    notes: "English collapses this into 'sister-in-law.'"
+  # Affinal: sibling's spouse and child's spouse
+  - term: зять
+    gloss: son-in-law / sister's husband
+    source: "Friedrich 1964"
+    notes: "Polysemous: covers daughter's husband AND sister's husband."
+  - term: сноха
+    gloss: son's wife (from father's perspective)
+    source: "Friedrich 1964"
+    notes: "Traditionally distinguished from невестка by perspective (father vs. mother of the son). Modern usage sometimes merges them."
+  - term: невестка
+    gloss: son's wife / brother's wife
+    source: "Friedrich 1964"
+    notes: "Broader than сноха: covers son's wife (from mother's perspective) and brother's wife."
+  - term: свояк
+    gloss: wife's sister's husband
+    source: "Friedrich 1964"
+    notes: "No English single-word equivalent."
+  # Step-relations
+  - term: отчим
+    gloss: stepfather
+    source: "Kronenfeld 1996"
+    notes: "Parent's husband who is not biological father."
+  - term: мачеха
+    gloss: stepmother
+    source: "Kronenfeld 1996"
+    notes: "Parent's wife who is not biological mother."
+  - term: пасынок
+    gloss: stepson
+    source: "Kronenfeld 1996"
+    notes: "Spouse's son from prior relationship."
+  - term: падчерица
+    gloss: stepdaughter
+    source: "Kronenfeld 1996"
+    notes: "Spouse's daughter from prior relationship."
+deviations:
+  - item: "кузен/кузина omitted in favor of двоюродный брат/двоюродная сестра"
+    from: "кузен/кузина exist as French loanwords"
+    reason: "Двоюродный брат/сестра are the standard neutral forms; кузен is literary/archaic and would not reflect typical mBERT training data distributions."
+  - item: "ятровь omitted"
+    from: "Friedrich 1964 lists ятровь (husband's brother's wife)"
+    reason: "Archaic/dialectal; not in active use in modern standard Russian. Would produce near-zero corpus hits."
+  - item: "step-relations sourced to Kronenfeld rather than Friedrich"
+    from: "Friedrich 1964 focuses on affinal and consanguineal terms"
+    reason: "Step-relations are not Friedrich's focus but are needed for cross-linguistic balance."
