@@ -9,12 +9,12 @@ transformers>=4.40
 tokenizers
 
 # Topology
-ripser
+ripser==0.6.14
 giotto-tda
 networkx
 
 # Distributional semantics
-gensim
+gensim==4.4.0
 
 # Stats and metrics
 scikit-learn
