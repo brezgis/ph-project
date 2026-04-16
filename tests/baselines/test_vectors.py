@@ -201,8 +201,16 @@ class TestCCBranch:
             calls["cc_loader"] += 1
             return fake_model
 
+        def w2v_loader(cls, *a, **kw):
+            calls["w2v_loader"] += 1
+            return fixture_kv
+
         monkeypatch.setenv("FASTTEXT_DATA_DIR", str(tmp_path))
         monkeypatch.setattr("gensim.models.fasttext.load_facebook_model", cc_loader)
+        monkeypatch.setattr(
+            "gensim.models.KeyedVectors.load_word2vec_format",
+            classmethod(w2v_loader),
+        )
 
         from baselines import vectors as v
         import importlib
@@ -211,14 +219,35 @@ class TestCCBranch:
 
         load_fasttext("en", "cc")
         assert calls["cc_loader"] == 1
+        assert calls["w2v_loader"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Case-sensitivity contract
+# ---------------------------------------------------------------------------
+
+class TestCaseSensitivity:
+    def test_uppercase_lang_raises_value_error(self):
+        """load_fasttext is case-strict: 'EN' must raise ValueError, not silently work."""
+        from baselines.vectors import load_fasttext
+        with pytest.raises(ValueError, match="lang"):
+            load_fasttext("EN", "cc")
+
+    def test_uppercase_kind_raises_value_error(self):
+        """load_fasttext is case-strict: 'CC' must raise ValueError."""
+        from baselines.vectors import load_fasttext
+        with pytest.raises(ValueError, match="kind"):
+            load_fasttext("en", "CC")
 
 
 # ---------------------------------------------------------------------------
 # Smoke tests — skip if real files are absent
 # ---------------------------------------------------------------------------
 
+from baselines.vectors import _DEFAULT_DATA_DIR  # noqa: E402
+
 FASTTEXT_DATA_DIR = pathlib.Path(
-    os.environ.get("FASTTEXT_DATA_DIR", "/home/anna/ph-project/data/fasttext")
+    os.environ.get("FASTTEXT_DATA_DIR", str(_DEFAULT_DATA_DIR))
 )
 _SKIP_MSG = (
     "Real fastText files not found. "

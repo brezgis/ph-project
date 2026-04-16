@@ -119,9 +119,10 @@ def _load_cc(lang: str, root: pathlib.Path) -> KeyedVectors:
     path = root / "cc" / filename
 
     if not path.exists():
+        _script = pathlib.Path(__file__).parent.parent / "scripts" / "download_fasttext.sh"
         raise FileNotFoundError(
             f"fastText CC-300 file not found: {path}\n"
-            f"Run scripts/download_fasttext.sh to download it."
+            f"Run {_script} to download it."
         )
 
     # Import here so the module can be imported without gensim.models.fasttext
@@ -138,9 +139,10 @@ def _load_aligned(lang: str, root: pathlib.Path) -> KeyedVectors:
     path = root / "aligned" / filename
 
     if not path.exists():
+        _script = pathlib.Path(__file__).parent.parent / "scripts" / "download_fasttext.sh"
         raise FileNotFoundError(
             f"MUSE aligned vectors file not found: {path}\n"
-            f"Run scripts/download_fasttext.sh to download it."
+            f"Run {_script} to download it."
         )
 
     kv = KeyedVectors.load_word2vec_format(str(path), binary=False)
