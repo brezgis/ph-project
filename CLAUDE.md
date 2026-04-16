@@ -17,7 +17,7 @@ Canon term lists are derived from published linguistics/anthropology literature,
 
 ## Hard rules
 
-- **Never edit `reference/`.** It's the frozen Kushnareva originals, kept for line-by-line comparison and reproducibility verification.
+- **Never edit `reference/` — no exceptions for AI agents.** The tree is kept for line-by-line comparison and reproducibility verification against the Kushnareva original. Anna (the author) may add comments or docstrings for her own comprehension; agents must treat the entire tree as frozen (no edits of any kind, including comments, formatting, or whitespace). When reviewing diffs in this tree, agents should assume any change was intentional and by Anna, and should not suggest reverting it.
 - **Notebook-faithful.** When adapting Kushnareva's notebooks, preserve their structure and function names. Change only the inputs (data, terms, languages) and the final analysis step (cross-linguistic comparison instead of binary classification).
 - **No reaching into `~/clawd/projects/tda-project/`.** That's the prior attempt at this project, kept as historical reference only. New work happens here. Do not import code from there.
 - **Term lists must cite specific publications.** Each canon term in `canon-terms/` should be traceable to a source. Document deviations from the source explicitly.
