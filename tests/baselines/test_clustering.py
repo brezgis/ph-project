@@ -1,11 +1,18 @@
 """Placeholder tests for baselines/clustering.py.
 
-Real implementation and tests arrive in the clustering baseline task.
+Real tests arrive in ssa.4.
 """
 import pytest
 
 
-@pytest.mark.skip(reason="awaits clustering baseline implementation")
+def test_clustering_module_importable():
+    """Smoke: module tree is valid and the public API is present."""
+    from baselines.clustering import agglomerative_linkage, kmeans_silhouette_sweep
+    assert callable(agglomerative_linkage)
+    assert callable(kmeans_silhouette_sweep)
+
+
+@pytest.mark.skip(reason="awaits ssa.4 implementation")
 def test_agglomerative_linkage_placeholder():
-    """Placeholder — to be replaced by full unit tests when clustering is implemented."""
+    """Placeholder — full unit tests land with ssa.4."""
     pass

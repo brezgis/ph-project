@@ -1,11 +1,18 @@
 """Placeholder tests for baselines/topology.py.
 
-Real implementation and tests arrive in the topology baseline task.
+Real tests arrive in ssa.5.
 """
 import pytest
 
 
-@pytest.mark.skip(reason="awaits topology baseline implementation")
+def test_topology_module_importable():
+    """Smoke: module tree is valid and the public API is present."""
+    from baselines.topology import rips_barcode, barcode_features
+    assert callable(rips_barcode)
+    assert callable(barcode_features)
+
+
+@pytest.mark.skip(reason="awaits ssa.5 implementation")
 def test_barcode_features_placeholder():
-    """Placeholder — to be replaced by full unit tests when topology is implemented."""
+    """Placeholder — full unit tests land with ssa.5."""
     pass
