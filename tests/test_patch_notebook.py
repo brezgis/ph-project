@@ -3,12 +3,14 @@
 Covers:
 - patch() applied to features_calculation_by_thresholds.ipynb (already patched in 4zo)
 - patch() applied to features_prediction.ipynb (new in 3nh)
-- Idempotency: re-running patch() leaves notebooks unchanged
-- CLI: patch_notebook.py accepts a --notebook argument
+- Idempotency: re-running patch() leaves notebooks unchanged (bool + byte equality)
+- CLI: patch_notebook.py accepts a --notebook argument and patches content correctly
+- Dispatcher: unknown notebook names raise ValueError
 """
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -28,6 +30,18 @@ REF_THRESHOLD_NB = REPO_ROOT / "reference" / "features_calculation_by_thresholds
 
 def _load_nb(path: Path) -> nbformat.NotebookNode:
     return nbformat.read(path, as_version=4)
+
+
+# ---------------------------------------------------------------------------
+# Module-level helper: load patch_notebook module from script path
+# ---------------------------------------------------------------------------
+
+def _load_patch_module():
+    """Import patch_notebook.py as a module. Returns the loaded module."""
+    spec = importlib.util.spec_from_file_location("patch_notebook", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +74,7 @@ class TestPredictionNotebookPatched:
         src = REF_PREDICTION_NB
         dst = tmp_path / "features_prediction.ipynb"
         shutil.copy(src, dst)
-        # Import patch() directly from the script
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("patch_notebook", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = _load_patch_module()
         mod.patch(dst)
         self.nb = _load_nb(dst)
         self.mod = mod
@@ -107,22 +117,173 @@ class TestPredictionNotebookPatched:
         assert "small_gpt_web" not in all_sources
 
     def test_idempotent(self, tmp_path):
-        """Applying patch twice produces identical notebook.
+        """Applying patch twice produces identical notebook bytes.
 
         Uses the frozen reference/ original (always unpatched) as the source
         so changed1 is reliably True regardless of the state of the working
         replication/ notebook.
         """
-        dst = tmp_path / "features_prediction_idem.ipynb"
+        dst = tmp_path / "features_prediction.ipynb"
         shutil.copy(REF_PREDICTION_NB, dst)
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("patch_notebook", SCRIPT)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = _load_patch_module()
         changed1 = mod.patch(dst)
+        bytes_after_first = dst.read_bytes()
         changed2 = mod.patch(dst)
+        bytes_after_second = dst.read_bytes()
         assert changed1 is True
         assert changed2 is False, "Second patch run should be a no-op"
+        assert bytes_after_first == bytes_after_second, (
+            "Byte content must be identical after first and second patch runs"
+        )
+
+
+# ---------------------------------------------------------------------------
+# features_calculation_by_thresholds.ipynb patches
+# ---------------------------------------------------------------------------
+
+class TestThresholdNotebookPatched:
+    """Verify the threshold notebook receives all expected patches."""
+
+    @pytest.fixture(autouse=True)
+    def patched_nb(self, tmp_path):
+        """Copy the frozen reference threshold notebook to tmp, apply patch, load result."""
+        src = REF_THRESHOLD_NB
+        dst = tmp_path / "features_calculation_by_thresholds.ipynb"
+        shutil.copy(src, dst)
+        mod = _load_patch_module()
+        mod.patch(dst)
+        self.nb = _load_nb(dst)
+        self.mod = mod
+
+    def test_setup_cell_prepended(self):
+        """First cell must be the replication setup cell."""
+        assert self.mod.SETUP_CELL_MARKER in self.nb.cells[0].source
+
+    def test_import_swap_old_gone(self):
+        """Old grab_weights import must not appear in patched notebook."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert "from grab_weights import grab_attention_weights" not in all_sources
+
+    def test_import_swap_new_present(self):
+        """New grab_weights_compat import must appear in patched notebook."""
+        sources = _find_source_containing(self.nb, "grab_weights_compat")
+        assert sources, "No cell with grab_weights_compat import"
+        assert "from grab_weights_compat import grab_attention_weights" in sources[0]
+
+    def test_input_dir_old_gone(self):
+        """Old small_gpt_web input_dir must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert 'input_dir = "small_gpt_web/"' not in all_sources
+
+    def test_input_dir_new_present(self):
+        """New input_dir must point to ../data/processed/."""
+        sources = _find_source_containing(self.nb, 'input_dir = "../data/processed/"')
+        assert sources, 'No cell with input_dir = "../data/processed/"'
+
+    def test_output_dir_old_gone(self):
+        """Old small_gpt_web output_dir must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert 'output_dir = "small_gpt_web/"' not in all_sources
+
+    def test_output_dir_new_present(self):
+        """New output_dir must point to ../outputs/."""
+        sources = _find_source_containing(self.nb, 'output_dir = "../outputs/"')
+        assert sources, 'No cell with output_dir = "../outputs/"'
+
+    def test_subset_old_gone(self):
+        """Old subset test_5k assignment must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert 'subset = "test_5k"' not in all_sources
+
+    def test_subset_new_present(self):
+        """New subset must be 'test'."""
+        sources = _find_source_containing(self.nb, 'subset = "test"')
+        assert sources, 'No cell with subset = "test"'
+
+    def test_batch_encode_plus_old_gone(self):
+        """Deprecated tokenizer.batch_encode_plus must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert "tokenizer.batch_encode_plus(" not in all_sources
+
+    def test_batch_encode_plus_new_present(self):
+        """Modern tokenizer( call must appear."""
+        sources = _find_source_containing(self.nb, "tokenizer(")
+        assert sources, "No cell with tokenizer( call"
+
+    def test_pad_to_max_length_old_gone(self):
+        """Deprecated pad_to_max_length=True must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert "pad_to_max_length=True" not in all_sources
+
+    def test_pad_to_max_length_new_present(self):
+        """Modern padding='max_length' must appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert 'padding="max_length"' in all_sources
+
+    def test_list_batch_texts_old_gone(self):
+        """Raw tokenizer(batch_texts, must not appear (ndarray not accepted)."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        # Old form passes ndarray directly
+        assert "tokenizer(batch_texts," not in all_sources
+
+    def test_list_batch_texts_new_present(self):
+        """list(batch_texts) wrapping must appear."""
+        sources = _find_source_containing(self.nb, "tokenizer(list(batch_texts),")
+        assert sources, "No cell with tokenizer(list(batch_texts),"
+
+    def test_cuda1_old_gone(self):
+        """Hardcoded cuda:1 must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert "device='cuda:1'" not in all_sources
+
+    def test_cuda0_new_present(self):
+        """cuda:0 must appear."""
+        sources = _find_source_containing(self.nb, "device='cuda:0'")
+        assert sources, "No cell with device='cuda:0'"
+
+    def test_idempotent(self, tmp_path):
+        """Applying patch twice produces identical notebook bytes."""
+        dst = tmp_path / "features_calculation_by_thresholds.ipynb"
+        shutil.copy(REF_THRESHOLD_NB, dst)
+        mod = _load_patch_module()
+        changed1 = mod.patch(dst)
+        bytes_after_first = dst.read_bytes()
+        changed2 = mod.patch(dst)
+        bytes_after_second = dst.read_bytes()
+        assert changed1 is True
+        assert changed2 is False, "Second patch run should be a no-op"
+        assert bytes_after_first == bytes_after_second, (
+            "Byte content must be identical after first and second patch runs"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Dispatcher: unknown notebook name must raise ValueError
+# ---------------------------------------------------------------------------
+
+class TestDispatcherRejectsUnknownNotebook:
+    """patch() must fail loudly for unsupported notebook names."""
+
+    def test_unknown_notebook_raises_value_error(self, tmp_path):
+        """patch() on an unknown notebook basename must raise ValueError."""
+        # Use REF_THRESHOLD_NB content but save under an unsupported name
+        src = REF_THRESHOLD_NB
+        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        shutil.copy(src, dst)
+        mod = _load_patch_module()
+        with pytest.raises(ValueError, match="No patch set defined for notebook"):
+            mod.patch(dst)
+
+    def test_unknown_notebook_cli_exits_nonzero(self, tmp_path):
+        """CLI on an unknown notebook basename must exit non-zero."""
+        src = REF_THRESHOLD_NB
+        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        shutil.copy(src, dst)
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--notebook", str(dst)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode != 0
 
 
 # ---------------------------------------------------------------------------
@@ -133,18 +294,25 @@ class TestCLI:
     """patch_notebook.py should accept a --notebook CLI argument."""
 
     def test_cli_accepts_notebook_arg_threshold(self, tmp_path):
-        """Running with --notebook pointing to threshold nb should succeed."""
-        dst = tmp_path / "threshold.ipynb"
+        """Running with --notebook pointing to threshold nb should patch content."""
+        dst = tmp_path / "features_calculation_by_thresholds.ipynb"
         shutil.copy(REF_THRESHOLD_NB, dst)
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--notebook", str(dst)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stderr
+        # Verify post-patch content is present
+        nb = _load_nb(dst)
+        all_sources = " ".join(_get_code_source(nb))
+        assert (
+            "from grab_weights_compat import grab_attention_weights" in all_sources
+            or 'input_dir = "../data/processed/"' in all_sources
+        ), "Expected at least one post-patch string in patched threshold notebook"
 
     def test_cli_accepts_notebook_arg_prediction(self, tmp_path):
         """Running with --notebook pointing to prediction nb should succeed."""
-        dst = tmp_path / "prediction.ipynb"
+        dst = tmp_path / "features_prediction.ipynb"
         shutil.copy(REF_PREDICTION_NB, dst)
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--notebook", str(dst)],

@@ -146,12 +146,18 @@ def patch(nb_path: Path) -> bool:
         changed = True
 
     # Determine which patch set to apply based on notebook name.
+    # Exactly two notebooks are supported; any other name is an error.
     name = nb_path.name
-    if "prediction" in name:
-        patch_pairs = PREDICTION_PATCHES
-    else:
-        # Default: threshold notebook (and any future notebook that shares its patch set).
-        patch_pairs = THRESHOLD_PATCHES
+    _SUPPORTED = {
+        "features_calculation_by_thresholds.ipynb": THRESHOLD_PATCHES,
+        "features_prediction.ipynb": PREDICTION_PATCHES,
+    }
+    if name not in _SUPPORTED:
+        raise ValueError(
+            f"No patch set defined for notebook {name!r}; "
+            f"supported: {sorted(_SUPPORTED)}"
+        )
+    patch_pairs = _SUPPORTED[name]
 
     for cell in nb.cells:
         if cell.cell_type != "code":
@@ -189,7 +195,10 @@ def main() -> None:
     nb_path: Path = args.notebook
     if not nb_path.exists():
         sys.exit(f"notebook not found: {nb_path}")
-    changed = patch(nb_path)
+    try:
+        changed = patch(nb_path)
+    except ValueError as exc:
+        sys.exit(str(exc))
     print(f"{nb_path.name}: {'patched' if changed else 'already patched (no-op)'}")
 
 
