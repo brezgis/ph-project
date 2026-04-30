@@ -2,6 +2,7 @@
 
 Supports three notebooks:
 - features_calculation_by_thresholds.ipynb
+- features_calculation_ripser_and_templates.ipynb
 - features_prediction.ipynb
 - features_calculation_ripser_and_templates.ipynb
 
@@ -18,6 +19,12 @@ Edits for features_calculation_by_thresholds.ipynb only:
 7. Insert a disk-budget warning markdown cell right after the setup cell.
 8. Append a cleanup cell that deletes per-subset attention .npy files once
    features are saved (gated on KEEP_ATTENTION flag).
+
+Edits for features_calculation_ripser_and_templates.ipynb only:
+2-5. Same import/path/subset/tokenizer fixes as the threshold notebook.
+6. Repoint cell 41's hardcoded template-phase paths to derive from `subset`.
+7. Repoint hardcoded "small_gpt_web/features/" template save paths.
+8. Same Pool worker-count + model cleanup pattern.
 
 Edits for features_prediction.ipynb only:
 2. Change train_subset from "test_5k" to "train".
@@ -47,6 +54,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Default notebooks — kept for backward compatibility when no --notebook arg given.
 THRESHOLD_NOTEBOOK = REPO_ROOT / "notebooks" / "features_calculation_by_thresholds.ipynb"
+RIPSER_NOTEBOOK = REPO_ROOT / "notebooks" / "features_calculation_ripser_and_templates.ipynb"
 PREDICTION_NOTEBOOK = REPO_ROOT / "notebooks" / "features_prediction.ipynb"
 
 # ---------------------------------------------------------------------------
@@ -67,6 +75,12 @@ for p in (os.path.abspath(os.path.join(_HERE, "..", "..", "reference")),
 import networkx as _nx
 if not hasattr(_nx, "from_numpy_matrix"):
     _nx.from_numpy_matrix = _nx.from_numpy_array
+
+# numpy 1.20 deprecated np.int as an alias for builtin int; 1.24 removed it.
+# reference/ripser_count.py still calls .astype(np.int). Restore the alias.
+import numpy as _np
+if not hasattr(_np, "int"):
+    _np.int = int
 """
 
 # ---------------------------------------------------------------------------
@@ -101,6 +115,32 @@ NEW_TOK_BATCH = "tokenizer(list(batch_texts),"
 OLD_DEVICE = "device='cuda:1'"
 NEW_DEVICE = "device='cuda:0'"
 
+# multiprocessing.Pool fork()s the parent kernel — with the BERT model still
+# resident in RAM and system swap commonly tight on this host, 20 workers
+# OOM-kills the kernel. Free the model (not needed for topology features:
+# those read attention tensors back from disk) and use a more conservative
+# worker count. 8 still gives plenty of parallelism on a 24-core box.
+# Two variants — the threshold notebook has no trailing space after 20,
+# the ripser notebook does. Both map to the same replacement.
+OLD_POOL_CELL = "num_of_workers = 20\npool = Pool(num_of_workers)"
+OLD_POOL_CELL_TRAILING_SPACE = "num_of_workers = 20 \npool = Pool(num_of_workers)"
+NEW_POOL_CELL = (
+    "import gc\n"
+    "try:\n"
+    "    del model  # not needed for topology features (read from disk)\n"
+    "except NameError:\n"
+    "    pass\n"
+    "try:\n"
+    "    import torch\n"
+    "    torch.cuda.empty_cache()\n"
+    "except Exception:\n"
+    "    pass\n"
+    "gc.collect()\n"
+    "\n"
+    "num_of_workers = 8\n"
+    "pool = Pool(num_of_workers)"
+)
+
 THRESHOLD_PATCHES = [
     (OLD_IMPORT, NEW_IMPORT),
     (OLD_INPUT, NEW_INPUT),
@@ -110,6 +150,49 @@ THRESHOLD_PATCHES = [
     (OLD_PAD_KW, NEW_PAD_KW),
     (OLD_TOK_BATCH, NEW_TOK_BATCH),
     (OLD_DEVICE, NEW_DEVICE),
+    (OLD_POOL_CELL, NEW_POOL_CELL),
+]
+
+# ---------------------------------------------------------------------------
+# Ripser/templates notebook patches
+# ---------------------------------------------------------------------------
+
+# Cell 41 of the ripser notebook hardcodes a second set of paths for the
+# template-feature phase, baking the subset name into the attention filename.
+# Rewrite to derive everything from `subset` (defined in cell 8) so re-runs
+# only need that one variable changed.
+OLD_RIPSER_TEMPLATE_CONFIG = (
+    "attention_dir = 'small_gpt_web/attentions/'\n"
+    "attention_name = 'test_5k_all_heads_12_layers_MAX_LEN_128_bert-base-uncased'\n"
+    "\n"
+    "texts_name = 'small_gpt_web/test_5k.csv'\n"
+    "\n"
+    "MAX_LEN = 128"
+)
+NEW_RIPSER_TEMPLATE_CONFIG = (
+    "attention_dir = '../outputs/attentions/'\n"
+    "attention_name = subset + '_all_heads_12_layers_MAX_LEN_128_bert-base-uncased'\n"
+    "\n"
+    "texts_name = '../data/processed/' + subset + '.csv'\n"
+    "\n"
+    "MAX_LEN = 128"
+)
+
+# Two cells construct the template .npy save path with a hardcoded prefix.
+OLD_TEMPLATE_SAVE = '"small_gpt_web/features/" + '
+NEW_TEMPLATE_SAVE = '"../outputs/features/" + '
+
+RIPSER_PATCHES = [
+    (OLD_IMPORT, NEW_IMPORT),
+    (OLD_INPUT, NEW_INPUT),
+    (OLD_OUTPUT, NEW_OUTPUT),
+    (OLD_SUBSET, NEW_SUBSET),
+    (OLD_BATCH_ENCODE, NEW_BATCH_ENCODE),
+    (OLD_PAD_KW, NEW_PAD_KW),
+    (OLD_TOK_BATCH, NEW_TOK_BATCH),
+    (OLD_POOL_CELL_TRAILING_SPACE, NEW_POOL_CELL),
+    (OLD_RIPSER_TEMPLATE_CONFIG, NEW_RIPSER_TEMPLATE_CONFIG),
+    (OLD_TEMPLATE_SAVE, NEW_TEMPLATE_SAVE),
 ]
 
 # ---------------------------------------------------------------------------
@@ -315,8 +398,12 @@ def patch(nb_path: Path) -> bool:
     nb = nbformat.read(nb_path, as_version=4)
     changed = False
 
-    # Setup cell — shared by both notebooks.
-    if not (nb.cells and SETUP_CELL_MARKER in nb.cells[0].source):
+    # Setup cell — shared by all notebooks. Insert if missing, refresh if outdated.
+    if nb.cells and SETUP_CELL_MARKER in nb.cells[0].source:
+        if nb.cells[0].source.rstrip() != SETUP_CELL_SOURCE.rstrip():
+            nb.cells[0].source = SETUP_CELL_SOURCE
+            changed = True
+    else:
         nb.cells.insert(0, nbformat.v4.new_code_cell(SETUP_CELL_SOURCE))
         changed = True
 
@@ -325,6 +412,7 @@ def patch(nb_path: Path) -> bool:
     name = nb_path.name
     _SUPPORTED = {
         "features_calculation_by_thresholds.ipynb": THRESHOLD_PATCHES,
+        "features_calculation_ripser_and_templates.ipynb": RIPSER_PATCHES,
         "features_prediction.ipynb": PREDICTION_PATCHES,
         "features_calculation_ripser_and_templates.ipynb": RIPSER_PATCHES,
     }
@@ -373,7 +461,8 @@ def main() -> None:
         help=(
             "Path to the notebook to patch. "
             "Defaults to features_calculation_by_thresholds.ipynb. "
-            "Pass features_prediction.ipynb to patch the prediction notebook."
+            "Pass features_calculation_ripser_and_templates.ipynb or "
+            "features_prediction.ipynb to patch those instead."
         ),
     )
     args = parser.parse_args()
