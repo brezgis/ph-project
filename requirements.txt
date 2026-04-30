@@ -12,6 +12,12 @@ tokenizers
 ripser==0.6.14
 giotto-tda
 networkx
+# ripserplusplus is the GPU ripser the Kushnareva paper used. PyPI's
+# ripserplusplus 1.1.2 doesn't compile against CUDA 12+ (thrust API
+# changed); upstream master has the fix (merged via PR #14 in 2023) but
+# was never re-released. Pinned to that fixed commit. Build requires
+# nvcc + a CUDA toolkit matching torch's CUDA major version.
+ripserplusplus @ git+https://github.com/simonzhang00/ripser-plusplus.git@30243c0c752de26d7fdf6e41f08bf7b840ca4744
 
 # Distributional semantics
 gensim==4.4.0
