@@ -275,22 +275,6 @@ def test_count_ripser_features_unknown_type_raises():
 # run_ripser_on_matrix — returns structured-array barcode dict
 # ---------------------------------------------------------------------------
 
-def test_run_ripser_on_matrix_returns_structured_barcodes():
-    from ripser_count_compat import run_ripser_on_matrix
-
-    m = _make_distance_matrix(8, seed=1)
-    barcode = run_ripser_on_matrix(m, dim=1)
-
-    assert isinstance(barcode, dict), "barcode must be a dict"
-    assert 0 in barcode, "barcode must have dim 0"
-    assert 1 in barcode, "barcode must have dim 1"
-    for d in (0, 1):
-        arr = barcode[d]
-        assert arr.dtype.names is not None, f"dim {d} array must be structured"
-        assert "birth" in arr.dtype.names, f"dim {d} must have 'birth' field"
-        assert "death" in arr.dtype.names, f"dim {d} must have 'death' field"
-
-
 def test_run_ripser_on_matrix_dim0_has_entries():
     from ripser_count_compat import run_ripser_on_matrix
 
@@ -376,3 +360,194 @@ def test_calculate_features_r_output_shape():
     # Expected: (n_layers, n_heads, n_samples, n_ripser_features)
     assert features.shape == (n_layers, n_heads, n_samples, 2), \
         f"Expected ({n_layers}, {n_heads}, {n_samples}, 2), got {features.shape}"
+
+    # Pin one numeric value to catch silent breakage at any pipeline stage.
+    # Captured from current shim output; must stay stable across runs given
+    # the fixed seed-based input matrix.
+    np.testing.assert_allclose(
+        features[0, 0, 0, 0],
+        0.7626509,
+        rtol=1e-5,
+        err_msg="layer0/head0/sample0 h0_m changed — pipeline regression",
+    )
+
+
+# ---------------------------------------------------------------------------
+# run_ripser_on_matrix — unit-square topology test (items A, B, C)
+# ---------------------------------------------------------------------------
+
+def _unit_square_distance_matrix() -> np.ndarray:
+    """Euclidean distance matrix for the 4 corners of a 1×1 square."""
+    pts = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.float64)
+    n = len(pts)
+    D = np.zeros((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(n):
+            D[i, j] = np.linalg.norm(pts[i] - pts[j])
+    return D
+
+
+def test_run_ripser_on_matrix_unit_square_topology():
+    """Known-input/known-output test: unit-square gives the expected barcodes.
+
+    H0: 4 bars (3 finite dying at 1.0, 1 essential with death=inf).
+    H1: 1 bar with birth=1.0, death=sqrt(2).
+    """
+    from ripser_count_compat import run_ripser_on_matrix
+
+    D = _unit_square_distance_matrix()
+    barcode = run_ripser_on_matrix(D, dim=1)
+
+    # --- H0 ---
+    h0 = barcode[0]
+    assert len(h0) == 4, f"H0 should have 4 bars, got {len(h0)}"
+
+    finite_deaths = h0["death"][h0["death"] != np.inf]
+    essential_deaths = h0["death"][h0["death"] == np.inf]
+
+    assert len(finite_deaths) == 3, f"H0 should have 3 finite bars, got {len(finite_deaths)}"
+    assert len(essential_deaths) == 1, "H0 should have 1 essential bar (death=inf)"
+    np.testing.assert_allclose(
+        finite_deaths,
+        np.ones(3, dtype=np.float32),
+        rtol=1e-5,
+        err_msg="H0 finite bars should all die at distance 1.0",
+    )
+
+    # --- H1 ---
+    h1 = barcode[1]
+    assert len(h1) == 1, f"H1 should have 1 bar, got {len(h1)}"
+    np.testing.assert_allclose(h1["birth"][0], 1.0, rtol=1e-5,
+                               err_msg="H1 bar birth should be 1.0")
+    np.testing.assert_allclose(h1["death"][0], np.sqrt(2), rtol=1e-5,
+                               err_msg="H1 bar death should be sqrt(2)")
+
+
+def test_run_ripser_on_matrix_essential_h0_bar():
+    """Any connected point set produces at least one essential H0 bar (death=inf)."""
+    from ripser_count_compat import run_ripser_on_matrix
+
+    # Simple 3-point triangle
+    D = np.array([[0.0, 0.5, 0.7],
+                  [0.5, 0.0, 0.6],
+                  [0.7, 0.6, 0.0]], dtype=np.float64)
+    barcode = run_ripser_on_matrix(D, dim=1)
+
+    h0_deaths = barcode[0]["death"]
+    assert np.any(h0_deaths == np.inf), (
+        "H0 should contain at least one essential bar (death=inf) "
+        f"for a connected point set; got deaths={h0_deaths}"
+    )
+
+
+def test_run_ripser_on_matrix_returns_structured_barcodes():
+    from ripser_count_compat import run_ripser_on_matrix
+
+    m = _make_distance_matrix(8, seed=1)
+    barcode = run_ripser_on_matrix(m, dim=1)
+
+    assert isinstance(barcode, dict), "barcode must be a dict"
+    assert 0 in barcode, "barcode must have dim 0"
+    assert 1 in barcode, "barcode must have dim 1"
+    for d in (0, 1):
+        arr = barcode[d]
+        assert arr.dtype.names is not None, f"dim {d} array must be structured"
+        assert "birth" in arr.dtype.names, f"dim {d} must have 'birth' field"
+        assert "death" in arr.dtype.names, f"dim {d} must have 'death' field"
+        # Pin the dtype exactly — this is the whole point of the shim.
+        assert arr.dtype == np.dtype([("birth", "<f4"), ("death", "<f4")]), (
+            f"dim {d} structured array dtype must be [('birth','<f4'),('death','<f4')], "
+            f"got {arr.dtype}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# count_ripser_features — h0_e and h0_t dispatch branches (item D)
+# ---------------------------------------------------------------------------
+
+def test_count_ripser_features_entropy_dispatch():
+    """'e' (entropy) dispatch branch produces non-zero entropy for unequal bars."""
+    from ripser_count_compat import count_ripser_features, barcode_entropy
+
+    barcode = {
+        0: np.array(
+            [(0.0, 1.0), (0.0, 0.5)],
+            dtype=[("birth", "<f4"), ("death", "<f4")],
+        ),
+    }
+    features = count_ripser_features([barcode], ["h0_e"])
+    expected = barcode_entropy(barcode, dim=0)
+    assert features.shape == (1, 1)
+    np.testing.assert_allclose(features[0, 0], expected, rtol=1e-4,
+                               err_msg="h0_e dispatch should call barcode_entropy")
+    assert features[0, 0] > 0, "Entropy of non-trivial barcode must be positive"
+
+
+def test_count_ripser_features_time_dispatch():
+    """'t' (time) dispatch branch: picks birth/death of longest barcode."""
+    from ripser_count_compat import count_ripser_features
+
+    barcode = {
+        0: np.array(
+            [(0.0, 1.0), (0.0, 0.5), (0.1, 0.4)],
+            dtype=[("birth", "<f4"), ("death", "<f4")],
+        ),
+    }
+    # Longest bar is (0.0, 1.0) — length 1.0.  death = 1.0, birth = 0.0
+    features_death = count_ripser_features([barcode], ["h0_t_d"])
+    features_birth = count_ripser_features([barcode], ["h0_t_b"])
+
+    assert features_death.shape == (1, 1)
+    assert features_birth.shape == (1, 1)
+    np.testing.assert_allclose(features_death[0, 0], 1.0, rtol=1e-5,
+                               err_msg="h0_t_d should return death of longest bar")
+    np.testing.assert_allclose(features_birth[0, 0], 0.0, atol=1e-5,
+                               err_msg="h0_t_b should return birth of longest bar")
+
+
+# ---------------------------------------------------------------------------
+# barcode_mean — empty case symmetry (item E)
+# ---------------------------------------------------------------------------
+
+def test_barcode_mean_empty_returns_zero():
+    from ripser_count_compat import barcode_mean
+
+    barcode = {0: np.array([], dtype=[("birth", "<f4"), ("death", "<f4")])}
+    assert barcode_mean(barcode, dim=0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# count_ripser_features — narrow ValueError for unknown type (item F)
+# ---------------------------------------------------------------------------
+
+def test_count_ripser_features_unknown_type_raises_value_error():
+    """Unknown feature type raises ValueError specifically (not just any Exception)."""
+    from ripser_count_compat import count_ripser_features
+
+    barcode = {0: np.array([(0.0, 0.5)], dtype=[("birth", "<f4"), ("death", "<f4")])}
+    with pytest.raises(ValueError):
+        count_ripser_features([barcode], ["h0_z"])
+
+
+# ---------------------------------------------------------------------------
+# count_ripser_features — malformed bd character raises ValueError (item H)
+# ---------------------------------------------------------------------------
+
+def test_count_ripser_features_malformed_bd_raises_value_error():
+    """A malformed bd character (not 'b' or 'd') in 'n' feature string raises ValueError."""
+    from ripser_count_compat import count_ripser_features
+
+    barcode = {0: np.array([(0.0, 0.5)], dtype=[("birth", "<f4"), ("death", "<f4")])}
+    # Feature string: h0_n_x_m_t0.5 — 'x' is not a valid bd character in 'n' branch
+    with pytest.raises(ValueError):
+        count_ripser_features([barcode], ["h0_n_x_m_t0.5"])
+
+
+def test_count_ripser_features_malformed_bd_in_t_branch_raises_value_error():
+    """A malformed bd character (not 'b' or 'd') in 't' feature string raises ValueError."""
+    from ripser_count_compat import count_ripser_features
+
+    barcode = {0: np.array([(0.0, 0.5)], dtype=[("birth", "<f4"), ("death", "<f4")])}
+    # Feature string: h0_t_x — 'x' is not a valid bd character in 't' branch
+    with pytest.raises(ValueError):
+        count_ripser_features([barcode], ["h0_t_x"])

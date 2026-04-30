@@ -135,6 +135,9 @@ def barcode_number_of_barcodes(barcode, dim=0):
 
 
 def barcode_entropy(barcode, dim=0):
+    # Note: uses non-in-place division (lengths = lengths / total) instead of
+    # reference's in-place form.  Behaviorally equivalent, since lengths is
+    # already a fresh subtraction result.
     lengths = barcode[dim]["death"] - barcode[dim]["birth"]
     lengths = lengths / np.sum(lengths)
     return -np.sum(lengths * np.log(lengths))
@@ -170,6 +173,9 @@ def count_ripser_features(barcodes, feature_list=["h0_m"]):
     Identical logic to reference/ripser_count.py — operates on structured
     barcode arrays, so it works after converting ripser output via
     run_ripser_on_matrix.
+
+    Note: raises ValueError on unknown feature type, vs reference's accidental
+    NameError fall-through.
     """
     barcodes = [barcode_pop_inf(barcode) for barcode in barcodes]
     features = []
@@ -184,10 +190,20 @@ def count_ripser_features(barcodes, feature_list=["h0_m"]):
             feat = [barcode_std(b, dim) for b in barcodes]
         elif ftype == "n":
             bd, ml, t = fargs[0], fargs[1], float(fargs[2][1:])
-            bd = "birth" if bd == "b" else "death"
+            if bd == "b":
+                bd = "birth"
+            elif bd == "d":
+                bd = "death"
+            else:
+                raise ValueError(f"Unknown bd character: {bd!r}")
             feat = [barcode_number(b, dim, bd, ml, t) for b in barcodes]
         elif ftype == "t":
-            bd = "birth" if fargs[0] == "b" else "death"
+            if fargs[0] == "b":
+                bd = "birth"
+            elif fargs[0] == "d":
+                bd = "death"
+            else:
+                raise ValueError(f"Unknown bd character: {fargs[0]!r}")
             feat = [barcode_time(b, dim, bd) for b in barcodes]
         elif ftype == "nb":
             feat = [barcode_number_of_barcodes(b, dim) for b in barcodes]
@@ -209,6 +225,9 @@ def matrix_to_ripser(matrix, ntokens, lower_bound=0.0):
     Mirrors reference/ripser_count.py::matrix_to_ripser exactly, except we
     use float64 throughout (ripser.ripser expects float64) and avoid
     np.int (deprecated alias removed in NumPy 1.24).
+
+    Note: uses float64 throughout to avoid the deprecated np.int alias used by
+    the reference.
     """
     matrix = cutoff_matrix(matrix, ntokens)
     matrix = (matrix > lower_bound).astype(np.float64) * matrix.astype(np.float64)
