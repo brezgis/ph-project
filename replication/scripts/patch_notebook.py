@@ -182,6 +182,16 @@ NEW_RIPSER_TEMPLATE_CONFIG = (
 OLD_TEMPLATE_SAVE = '"small_gpt_web/features/" + '
 NEW_TEMPLATE_SAVE = '"../outputs/features/" + '
 
+# ripserplusplus leaks GPU memory across calls within one process. The
+# notebook authors already worked around this by spawning a subprocess
+# per split (see cell 29's `p.close()  # releasing resources of ripser`),
+# but they set `number_of_splits = 2`. With our sample size that's still
+# ~72k ripser calls per subprocess, which OOMs the GPU before completion.
+# Bump to 20 so each subprocess handles ~7k calls before exiting and the
+# OS reclaims GPU memory between them.
+OLD_SPLITS = "number_of_splits = 2"
+NEW_SPLITS = "number_of_splits = 20"
+
 RIPSER_PATCHES = [
     (OLD_IMPORT, NEW_IMPORT),
     (OLD_INPUT, NEW_INPUT),
@@ -193,6 +203,7 @@ RIPSER_PATCHES = [
     (OLD_POOL_CELL_TRAILING_SPACE, NEW_POOL_CELL),
     (OLD_RIPSER_TEMPLATE_CONFIG, NEW_RIPSER_TEMPLATE_CONFIG),
     (OLD_TEMPLATE_SAVE, NEW_TEMPLATE_SAVE),
+    (OLD_SPLITS, NEW_SPLITS),
 ]
 
 # ---------------------------------------------------------------------------
