@@ -101,10 +101,11 @@ Each kernel start spawns inside a `systemd-run --user --scope` cgroup with
 `MemoryMax=48G` and `MemorySwapMax=4G`. Override via environment variables:
 
 ```bash
-PH_KERNEL_MEM_MAX=32G PH_KERNEL_SWAP_MAX=2G
+export PH_KERNEL_MEM_MAX=32G
+export PH_KERNEL_SWAP_MAX=2G
 ```
 
-Set these in your shell profile or VS Code's terminal environment before
+Add these to your shell profile (or VS Code's terminal environment) before
 starting the kernel. Requires cgroup v2 (the launcher refuses to run on
 cgroup v1).
 
