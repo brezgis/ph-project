@@ -14,6 +14,9 @@ Edits for features_calculation_by_thresholds.ipynb only:
 4. Change subset from "test_5k" to "test".
 5. Patch deprecated tokenizer API (batch_encode_plus / pad_to_max_length / ndarray).
 6. Patch hardcoded cuda:1 -> cuda:0 (single-GPU machine).
+7. Insert a disk-budget warning markdown cell right after the setup cell.
+8. Append a cleanup cell that deletes per-subset attention .npy files once
+   features are saved (gated on KEEP_ATTENTION flag).
 
 Edits for features_prediction.ipynb only:
 2. Change train_subset from "test_5k" to "train".
@@ -102,6 +105,59 @@ THRESHOLD_PATCHES = [
 ]
 
 # ---------------------------------------------------------------------------
+# Disk-budget warning (threshold notebook only)
+# ---------------------------------------------------------------------------
+
+# Each subset persists ~4.7GB of float16 attention tensors before features
+# are extracted. f93 filled the host disk to 100% running this notebook on
+# train+valid splits; surface the constraint at the top so a future reader
+# (or rerun) is not surprised. The cleanup cell at the bottom reclaims
+# space once features are saved.
+DISK_BUDGET_MD_MARKER = "<!-- replication disk-budget — added by patch_notebook.py -->"
+DISK_BUDGET_MD_SOURCE = f"""{DISK_BUDGET_MD_MARKER}
+## Disk budget
+
+This notebook persists attention tensors to `../outputs/attentions/` before
+extracting topology features. Each subset writes ~4.7GB
+(samples × 12 layers × 12 heads × 128² × float16). Running all three splits
+(train, valid, test) without cleanup needs ~14GB free.
+
+The final cell deletes the per-subset attention files after features are
+saved. Set `KEEP_ATTENTION = True` in that cell to retain them — useful
+when chaining into `features_calculation_ripser_and_templates.ipynb` on
+the same subset to avoid recomputing attention.
+"""
+
+# ---------------------------------------------------------------------------
+# Cleanup cell (threshold notebook only)
+# ---------------------------------------------------------------------------
+
+# Appended at the very end so it runs only if the notebook executed
+# successfully through to feature save. Uses adj_filenames (built earlier in
+# the feature-extraction phase) so the deletion list is exactly the files
+# this run produced — no globbing, no risk of touching another subset's
+# attention files.
+CLEANUP_CELL_MARKER = "# replication cleanup — added by patch_notebook.py"
+CLEANUP_CELL_SOURCE = f"""{CLEANUP_CELL_MARKER}
+# Delete per-subset attention .npy files now that features are saved.
+# Set KEEP_ATTENTION = True to retain them (e.g. to skip recompute when
+# running features_calculation_ripser_and_templates.ipynb on the same
+# subset). See the disk-budget cell at the top.
+KEEP_ATTENTION = False
+
+import os as _os
+if KEEP_ATTENTION:
+    print(f"Cleanup: KEEP_ATTENTION=True, retaining {{len(adj_filenames)}} attention file(s) for subset={{subset!r}}.")
+else:
+    _removed = 0
+    for _f in adj_filenames:
+        if _os.path.exists(_f):
+            _os.remove(_f)
+            _removed += 1
+    print(f"Cleanup: removed {{_removed}} attention file(s) for subset={{subset!r}}.")
+"""
+
+# ---------------------------------------------------------------------------
 # Prediction notebook patches
 # ---------------------------------------------------------------------------
 
@@ -171,9 +227,24 @@ def patch(nb_path: Path) -> bool:
             cell.source = after
             changed = True
 
+    # Threshold-notebook-only: disk-budget markdown + cleanup cell.
+    if name == "features_calculation_by_thresholds.ipynb":
+        if not _has_cell_with_marker(nb, DISK_BUDGET_MD_MARKER):
+            # Insert right after the setup cell (which is at index 0).
+            nb.cells.insert(1, nbformat.v4.new_markdown_cell(DISK_BUDGET_MD_SOURCE))
+            changed = True
+        if not _has_cell_with_marker(nb, CLEANUP_CELL_MARKER):
+            nb.cells.append(nbformat.v4.new_code_cell(CLEANUP_CELL_SOURCE))
+            changed = True
+
     if changed:
         nbformat.write(nb, nb_path)
     return changed
+
+
+def _has_cell_with_marker(nb: nbformat.NotebookNode, marker: str) -> bool:
+    """True if any cell in *nb* contains *marker* in its source."""
+    return any(marker in cell.source for cell in nb.cells)
 
 
 def main() -> None:

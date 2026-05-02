@@ -241,6 +241,40 @@ class TestThresholdNotebookPatched:
         sources = _find_source_containing(self.nb, "device='cuda:0'")
         assert sources, "No cell with device='cuda:0'"
 
+    def test_disk_budget_markdown_inserted_after_setup(self):
+        """A disk-budget markdown cell must sit immediately after the setup cell."""
+        assert self.nb.cells[1].cell_type == "markdown", (
+            f"Cell 1 should be markdown, got {self.nb.cells[1].cell_type}"
+        )
+        assert self.mod.DISK_BUDGET_MD_MARKER in self.nb.cells[1].source
+
+    def test_disk_budget_markdown_mentions_size_and_cleanup(self):
+        """The disk-budget cell must communicate the per-subset size and the
+        existence of a cleanup mechanism so a future reader is not surprised."""
+        md = self.nb.cells[1].source
+        assert "4.7GB" in md, "Disk-budget cell should call out the per-subset size"
+        assert "KEEP_ATTENTION" in md, "Disk-budget cell should reference the override flag"
+
+    def test_cleanup_cell_appended_at_end(self):
+        """A cleanup code cell must be the last cell in the notebook."""
+        last = self.nb.cells[-1]
+        assert last.cell_type == "code", f"Last cell should be code, got {last.cell_type}"
+        assert self.mod.CLEANUP_CELL_MARKER in last.source
+
+    def test_cleanup_cell_uses_keep_attention_flag(self):
+        """Cleanup must be gated on KEEP_ATTENTION so a user can opt out."""
+        src = self.nb.cells[-1].source
+        assert "KEEP_ATTENTION = False" in src, "Default must be cleanup-enabled"
+        assert "if KEEP_ATTENTION" in src, "Flag must control the deletion path"
+
+    def test_cleanup_cell_iterates_adj_filenames(self):
+        """Cleanup must delete files from adj_filenames (the per-subset list
+        built during feature extraction) — not glob a directory, which could
+        touch other subsets' files."""
+        src = self.nb.cells[-1].source
+        assert "adj_filenames" in src
+        assert "_os.remove(_f)" in src
+
     def test_idempotent(self, tmp_path):
         """Applying patch twice produces identical notebook bytes."""
         dst = tmp_path / "features_calculation_by_thresholds.ipynb"
@@ -255,6 +289,18 @@ class TestThresholdNotebookPatched:
         assert bytes_after_first == bytes_after_second, (
             "Byte content must be identical after first and second patch runs"
         )
+
+    def test_disk_budget_and_cleanup_not_added_to_prediction(self, tmp_path):
+        """Disk-budget markdown and cleanup cell are threshold-notebook-only;
+        the prediction notebook must not receive them."""
+        dst = tmp_path / "features_prediction.ipynb"
+        shutil.copy(REF_PREDICTION_NB, dst)
+        mod = _load_patch_module()
+        mod.patch(dst)
+        nb = _load_nb(dst)
+        all_sources = " ".join(c.source for c in nb.cells)
+        assert mod.DISK_BUDGET_MD_MARKER not in all_sources
+        assert mod.CLEANUP_CELL_MARKER not in all_sources
 
 
 # ---------------------------------------------------------------------------
