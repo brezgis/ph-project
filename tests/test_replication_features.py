@@ -8,14 +8,24 @@ Expected shape: (12, 12, 6, N_samples, 6)
   - 12 layers x 12 heads x 6 features x N_samples x 6 thresholds
   - N_samples = 1000 for all splits (500 human + 500 machine)
 
-Until all three splits have actually been run, per-subset checks skip
-gracefully — the suite stays green during development and only the
-final cross-split consistency check (test_features_files_present_or_skip)
-flips to xfail-style status when at least one but not all splits exist.
+By default, per-subset checks skip when the .npy files are absent so
+local development stays green before the notebook has been run for that
+split. Set PH_REQUIRE_FEATURES=1 to flip absent files into hard failures
+— useful for CI or post-run verification where the files MUST exist.
 """
 import os
 import numpy as np
 import pytest
+
+REQUIRE_FEATURES = os.environ.get("PH_REQUIRE_FEATURES") == "1"
+
+
+def _missing(subset: str, path):
+    """Either skip or fail when a feature file is absent, per env var."""
+    msg = f"Features file for '{subset}' not yet produced."
+    if REQUIRE_FEATURES:
+        pytest.fail(msg + " (PH_REQUIRE_FEATURES=1)")
+    pytest.skip(msg)
 
 FEATURES_DIR = os.path.join(
     os.path.dirname(__file__),
@@ -52,7 +62,7 @@ def test_features_shape(subset):
     """
     path = _find_features_file(subset)
     if path is None:
-        pytest.skip(f"Features file for '{subset}' not yet produced.")
+        _missing(subset, path)
     arr = np.load(path, allow_pickle=True)
     assert arr.shape == EXPECTED_SHAPE, (
         f"subset='{subset}': expected shape {EXPECTED_SHAPE}, got {arr.shape}"
@@ -64,7 +74,7 @@ def test_features_no_inf(subset):
     """Feature tensor must not contain +/-inf values."""
     path = _find_features_file(subset)
     if path is None:
-        pytest.skip(f"Features file for '{subset}' not yet produced.")
+        _missing(subset, path)
     arr = np.load(path, allow_pickle=True).astype(float)
     n_inf = np.sum(np.isinf(arr))
     assert n_inf == 0, f"subset='{subset}': found {n_inf} +/-inf values in feature tensor."
@@ -75,7 +85,7 @@ def test_features_not_all_zero(subset):
     """No head/layer slice should be entirely zero (would indicate a ripser bug)."""
     path = _find_features_file(subset)
     if path is None:
-        pytest.skip(f"Features file for '{subset}' not yet produced.")
+        _missing(subset, path)
     arr = np.load(path, allow_pickle=True)
     # Shape: (12, 12, 6, 1000, 6) — check that no (layer, head) slice is all-zero
     for layer in range(arr.shape[0]):

@@ -187,6 +187,11 @@ PREDICTION_PATCHES = [
 ]
 
 
+def _has_cell_with_marker(nb: nbformat.NotebookNode, marker: str) -> bool:
+    """True if any cell in *nb* contains *marker* in its source."""
+    return any(marker in cell.source for cell in nb.cells)
+
+
 def patch(nb_path: Path) -> bool:
     """Apply all applicable patches to the notebook at *nb_path*.
 
@@ -240,11 +245,6 @@ def patch(nb_path: Path) -> bool:
     if changed:
         nbformat.write(nb, nb_path)
     return changed
-
-
-def _has_cell_with_marker(nb: nbformat.NotebookNode, marker: str) -> bool:
-    """True if any cell in *nb* contains *marker* in its source."""
-    return any(marker in cell.source for cell in nb.cells)
 
 
 def main() -> None:

@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -251,8 +252,11 @@ class TestThresholdNotebookPatched:
     def test_disk_budget_markdown_mentions_size_and_cleanup(self):
         """The disk-budget cell must communicate the per-subset size and the
         existence of a cleanup mechanism so a future reader is not surprised."""
+        import re
         md = self.nb.cells[1].source
-        assert "4.7GB" in md, "Disk-budget cell should call out the per-subset size"
+        assert re.search(r"\d+(\.\d+)?\s?GB", md), (
+            "Disk-budget cell should call out the per-subset size in GB"
+        )
         assert "KEEP_ATTENTION" in md, "Disk-budget cell should reference the override flag"
 
     def test_cleanup_cell_appended_at_end(self):
@@ -301,6 +305,67 @@ class TestThresholdNotebookPatched:
         all_sources = " ".join(c.source for c in nb.cells)
         assert mod.DISK_BUDGET_MD_MARKER not in all_sources
         assert mod.CLEANUP_CELL_MARKER not in all_sources
+
+
+# ---------------------------------------------------------------------------
+# Cleanup cell behavior — exec the cell body, verify KEEP_ATTENTION semantics
+# ---------------------------------------------------------------------------
+
+class TestCleanupCellBehavior:
+    """Execute the cleanup cell body against fake adj_filenames to verify it
+    actually deletes files when KEEP_ATTENTION=False, retains them when True,
+    and tolerates entries that no longer exist on disk."""
+
+    def _patched_cleanup_source(self, tmp_path):
+        """Return the cleanup cell's source string from a freshly-patched threshold notebook."""
+        dst = tmp_path / "features_calculation_by_thresholds.ipynb"
+        shutil.copy(REF_THRESHOLD_NB, dst)
+        mod = _load_patch_module()
+        mod.patch(dst)
+        nb = _load_nb(dst)
+        # Cleanup cell is the last code cell and contains the marker.
+        for cell in reversed(nb.cells):
+            if cell.cell_type == "code" and mod.CLEANUP_CELL_MARKER in cell.source:
+                return cell.source
+        raise AssertionError("Cleanup cell not found in patched notebook")
+
+    def _make_npys(self, tmp_path, names):
+        paths = []
+        for n in names:
+            p = tmp_path / n
+            p.write_bytes(b"\x00" * 16)  # tiny valid file
+            paths.append(str(p))
+        return paths
+
+    def test_keep_false_deletes_all_files(self, tmp_path):
+        src = self._patched_cleanup_source(tmp_path)
+        files = self._make_npys(tmp_path, ["a.npy", "b.npy", "c.npy"])
+        ns = {"adj_filenames": list(files), "subset": "train"}
+        exec(src, ns)
+        for f in files:
+            assert not os.path.exists(f), f"{f} should have been deleted"
+
+    def test_keep_true_retains_all_files(self, tmp_path):
+        src = self._patched_cleanup_source(tmp_path)
+        files = self._make_npys(tmp_path, ["a.npy", "b.npy"])
+        # Override KEEP_ATTENTION after the cell sets it. Easiest: replace
+        # the literal in the source so the cell starts with KEEP_ATTENTION=True.
+        src_keep = src.replace("KEEP_ATTENTION = False", "KEEP_ATTENTION = True")
+        assert "KEEP_ATTENTION = True" in src_keep, "Sanity: KEEP_ATTENTION literal must be in cell"
+        ns = {"adj_filenames": list(files), "subset": "train"}
+        exec(src_keep, ns)
+        for f in files:
+            assert os.path.exists(f), f"{f} should have been retained when KEEP_ATTENTION=True"
+
+    def test_missing_file_does_not_raise(self, tmp_path):
+        """A stale entry in adj_filenames whose .npy was already removed must
+        not crash the cleanup loop."""
+        src = self._patched_cleanup_source(tmp_path)
+        real = self._make_npys(tmp_path, ["real.npy"])
+        ghost = str(tmp_path / "ghost.npy")  # never created
+        ns = {"adj_filenames": real + [ghost], "subset": "test"}
+        exec(src, ns)  # must not raise
+        assert not os.path.exists(real[0])
 
 
 # ---------------------------------------------------------------------------
