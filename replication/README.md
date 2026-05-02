@@ -141,8 +141,11 @@ replication/
 ├── README.md            this file
 ├── .gitignore           ignores data/ and outputs/
 ├── scripts/
-│   ├── download_webtext.sh   pulls JSONL files from OpenAI's public mirror
-│   └── prepare_csv.py        combines human + machine JSONL into labeled CSVs
+│   ├── download_webtext.sh       pulls JSONL files from OpenAI's public mirror
+│   ├── prepare_csv.py            combines human + machine JSONL into labeled CSVs
+│   ├── patch_notebook.py         applies replication-specific edits to the reference notebooks
+│   ├── predict_threshold_only.py threshold-only classifier path (working end-to-end pipeline)
+│   └── launch_jupyter.sh         systemd-run wrapper that caps kernel memory (see "Running notebooks")
 ├── notebooks/           editable copies of the four reference/ notebooks
 ├── data/                gitignored — raw JSONL and processed CSVs land here
 └── outputs/             gitignored — feature .npy files and classifier outputs

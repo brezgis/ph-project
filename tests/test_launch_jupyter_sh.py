@@ -19,13 +19,12 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
-import sys
 from pathlib import Path
 import textwrap
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "launch_jupyter.sh"
+SCRIPT = Path(__file__).resolve().parents[1] / "replication" / "scripts" / "launch_jupyter.sh"
 
 
 # ---------------------------------------------------------------------------
