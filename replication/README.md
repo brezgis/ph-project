@@ -85,6 +85,29 @@ JUPYTER_MEM_MAX=32G JUPYTER_SWAP_MAX=2G bash scripts/launch_jupyter.sh
 must return `cgroup2fs`). The script will exit immediately with a clear error
 on a cgroup v1 host. North satisfies this requirement.
 
+### Capped kernel for VS Code / Jupyter
+
+Install once:
+
+```bash
+python replication/scripts/install_kernel_spec.py
+```
+
+Then in VS Code, click the kernel picker (top right of any notebook) and
+choose **Python 3 (ph-project, capped)**. The same option appears in
+JupyterLab's kernel dropdown.
+
+Each kernel start spawns inside a `systemd-run --user --scope` cgroup with
+`MemoryMax=48G` and `MemorySwapMax=4G`. Override via environment variables:
+
+```bash
+PH_KERNEL_MEM_MAX=32G PH_KERNEL_SWAP_MAX=2G
+```
+
+Set these in your shell profile or VS Code's terminal environment before
+starting the kernel. Requires cgroup v2 (the launcher refuses to run on
+cgroup v1).
+
 ## Notebook edits needed
 
 The notebooks in `replication/notebooks/` are unmodified copies of `reference/`.
@@ -145,7 +168,9 @@ replication/
 │   ├── prepare_csv.py            combines human + machine JSONL into labeled CSVs
 │   ├── patch_notebook.py         applies replication-specific edits to the reference notebooks
 │   ├── predict_threshold_only.py threshold-only classifier path (working end-to-end pipeline)
-│   └── launch_jupyter.sh         systemd-run wrapper that caps kernel memory (see "Running notebooks")
+│   ├── launch_jupyter.sh         systemd-run wrapper that caps kernel memory (see "Running notebooks")
+│   ├── launch_kernel.sh          systemd-run wrapper for individual kernel launches (VS Code / Jupyter)
+│   └── install_kernel_spec.py    installs the capped kernel spec to ~/.local/share/jupyter/kernels/
 ├── notebooks/           editable copies of the four reference/ notebooks
 ├── data/                gitignored — raw JSONL and processed CSVs land here
 └── outputs/             gitignored — feature .npy files and classifier outputs
