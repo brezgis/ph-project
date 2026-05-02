@@ -6,6 +6,10 @@ from tqdm.notebook import tqdm
 from transformers import BertTokenizer, BertModel
 
 def grab_attention_weights(model, tokenizer, sentences, MAX_LEN, device='cuda:0'):
+    """ 1. tokenizes a batch of sentences
+        2. runs BERT w output_attentions=True
+        3. return numpy array shaped layers x samples x heads x tokens x tokens 
+    """
     inputs = tokenizer.batch_encode_plus([text_preprocessing(s) for s in sentences],
                                        return_tensors='pt',
                                        add_special_tokens=True,
@@ -45,6 +49,8 @@ def grab_weights_for_all(reviews,
     Returns:
         np.array[int,int,int]
     """
+
+    # CONVENIENCE WRAPPER: saves/caches a single layer+head's matrices to .npy, load previously computed weights
     
     model = BertModel.from_pretrained(model_name, output_attentions=True)
     tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=False)
