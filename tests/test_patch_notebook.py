@@ -452,6 +452,20 @@ class TestRipserNotebookPatched:
             "Barcode loop must pass filename and indices to the worker Process"
         )
 
+    def test_barcode_loop_passes_ntokens_sliced_by_indices(self):
+        """Barcode loop must pass ntokens[indices], not the full ntokens array.
+
+        The whole point of the refactor is that the child receives only the
+        slice it needs.  Passing ntokens (unsliced) would silently regress the
+        semantic intent even though filename and indices are present.
+        """
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "ntokens[indices]" in src, (
+            "Barcode loop must pass ntokens[indices] (sliced), not the full ntokens array"
+        )
+
     def test_number_of_splits_is_20(self):
         """number_of_splits must be 20 (bumped for production from the reference value of 2)."""
         sources = _find_source_containing(self.nb, "queue = Queue()")
