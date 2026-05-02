@@ -24,9 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "replication" / "scripts" / "patch_notebook.py"
 THRESHOLD_NB = REPO_ROOT / "replication" / "notebooks" / "features_calculation_by_thresholds.ipynb"
 PREDICTION_NB = REPO_ROOT / "replication" / "notebooks" / "features_prediction.ipynb"
+RIPSER_NB = REPO_ROOT / "replication" / "notebooks" / "features_calculation_ripser_and_templates.ipynb"
 # reference/ notebooks are the frozen originals — always unpatched.
 REF_PREDICTION_NB = REPO_ROOT / "reference" / "features_prediction.ipynb"
 REF_THRESHOLD_NB = REPO_ROOT / "reference" / "features_calculation_by_thresholds.ipynb"
+REF_RIPSER_NB = REPO_ROOT / "reference" / "features_calculation_ripser_and_templates.ipynb"
 
 
 def _load_nb(path: Path) -> nbformat.NotebookNode:
@@ -369,6 +371,134 @@ class TestCleanupCellBehavior:
 
 
 # ---------------------------------------------------------------------------
+# features_calculation_ripser_and_templates.ipynb patches
+# ---------------------------------------------------------------------------
+
+class TestRipserNotebookPatched:
+    """Verify the ripser notebook receives the mmap OOM-fix patches."""
+
+    @pytest.fixture(autouse=True)
+    def patched_nb(self, tmp_path):
+        """Copy the frozen reference ripser notebook to tmp, apply patch, load result."""
+        src = REF_RIPSER_NB
+        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        shutil.copy(src, dst)
+        mod = _load_patch_module()
+        mod.patch(dst)
+        self.nb = _load_nb(dst)
+        self.mod = mod
+
+    def test_setup_cell_prepended(self):
+        """First cell must be the replication setup cell."""
+        assert self.mod.SETUP_CELL_MARKER in self.nb.cells[0].source
+
+    def test_get_only_barcodes_new_signature(self):
+        """get_only_barcodes must accept (filename, indices, ...) not (adj_matricies, ...)."""
+        sources = _find_source_containing(self.nb, "def get_only_barcodes(")
+        assert sources, "No cell defining get_only_barcodes"
+        src = sources[0]
+        assert "def get_only_barcodes(filename, indices, ntokens_array, dim, lower_bound)" in src, (
+            "get_only_barcodes must have (filename, indices, ntokens_array, dim, lower_bound) signature"
+        )
+
+    def test_get_only_barcodes_uses_mmap_load(self):
+        """get_only_barcodes body must use np.load(filename, mmap_mode='r')[indices]."""
+        sources = _find_source_containing(self.nb, "def get_only_barcodes(")
+        assert sources, "No cell defining get_only_barcodes"
+        src = sources[0]
+        assert "np.load(filename, mmap_mode='r')[indices]" in src, (
+            "get_only_barcodes must load via mmap_mode='r' to avoid materialising full array"
+        )
+
+    def test_get_only_barcodes_old_signature_gone(self):
+        """Old get_only_barcodes(adj_matricies, ...) signature must not appear."""
+        all_sources = " ".join(_get_code_source(self.nb))
+        assert "def get_only_barcodes(adj_matricies," not in all_sources, (
+            "Old get_only_barcodes signature with adj_matricies must be removed"
+        )
+
+    def test_barcode_loop_no_parent_np_load(self):
+        """Barcode loop cell must not call np.load in the parent (pre-load removed).
+
+        The barcode loop cell is identified by `queue = Queue()` which only
+        appears in that cell, not in the helper-functions cell above it.
+        """
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "np.load(filename, allow_pickle=True)" not in src, (
+            "Parent-side np.load(filename, allow_pickle=True) must be removed from barcode loop"
+        )
+
+    def test_barcode_loop_no_split_matricies_and_lengths(self):
+        """Barcode loop must not call split_matricies_and_lengths (fancy-index copies gone).
+
+        Uses queue = Queue() as the unique marker for the loop cell; the
+        helper-functions cell above it also contains 'number_of_splits'.
+        """
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "split_matricies_and_lengths(" not in src, (
+            "split_matricies_and_lengths builds fancy-index copies; must not be called from loop"
+        )
+
+    def test_barcode_loop_passes_filename_and_indices(self):
+        """Barcode loop must pass (filename, indices, ...) to each Process."""
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "filename, indices," in src, (
+            "Barcode loop must pass filename and indices to the worker Process"
+        )
+
+    def test_barcode_loop_passes_ntokens_sliced_by_indices(self):
+        """Barcode loop must pass ntokens[indices], not the full ntokens array.
+
+        The whole point of the refactor is that the child receives only the
+        slice it needs.  Passing ntokens (unsliced) would silently regress the
+        semantic intent even though filename and indices are present.
+        """
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "ntokens[indices]" in src, (
+            "Barcode loop must pass ntokens[indices] (sliced), not the full ntokens array"
+        )
+
+    def test_number_of_splits_is_20(self):
+        """number_of_splits must be 20 (bumped for production from the reference value of 2)."""
+        sources = _find_source_containing(self.nb, "queue = Queue()")
+        assert sources, "No cell with queue = Queue() (barcode loop)"
+        src = sources[0]
+        assert "number_of_splits = 20" in src, (
+            "number_of_splits must be 20"
+        )
+
+    def test_idempotent(self, tmp_path):
+        """Applying patch twice produces identical notebook bytes."""
+        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        shutil.copy(REF_RIPSER_NB, dst)
+        mod = _load_patch_module()
+        changed1 = mod.patch(dst)
+        bytes_after_first = dst.read_bytes()
+        changed2 = mod.patch(dst)
+        bytes_after_second = dst.read_bytes()
+        assert changed1 is True
+        assert changed2 is False, "Second patch run should be a no-op"
+        assert bytes_after_first == bytes_after_second, (
+            "Byte content must be identical after first and second patch runs"
+        )
+
+    def test_disk_budget_and_cleanup_not_added_to_ripser(self, tmp_path):
+        """Disk-budget markdown and cleanup cell are threshold-notebook-only;
+        the ripser notebook must not receive them."""
+        all_sources = " ".join(c.source for c in self.nb.cells)
+        assert self.mod.DISK_BUDGET_MD_MARKER not in all_sources
+        assert self.mod.CLEANUP_CELL_MARKER not in all_sources
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher: unknown notebook name must raise ValueError
 # ---------------------------------------------------------------------------
 
@@ -376,25 +506,34 @@ class TestDispatcherRejectsUnknownNotebook:
     """patch() must fail loudly for unsupported notebook names."""
 
     def test_unknown_notebook_raises_value_error(self, tmp_path):
-        """patch() on an unknown notebook basename must raise ValueError."""
-        # Use REF_THRESHOLD_NB content but save under an unsupported name
+        """patch() on a truly unknown notebook basename must raise ValueError."""
+        # Use REF_THRESHOLD_NB content but save under a name not in _SUPPORTED
         src = REF_THRESHOLD_NB
-        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        dst = tmp_path / "totally_unknown_notebook.ipynb"
         shutil.copy(src, dst)
         mod = _load_patch_module()
         with pytest.raises(ValueError, match="No patch set defined for notebook"):
             mod.patch(dst)
 
     def test_unknown_notebook_cli_exits_nonzero(self, tmp_path):
-        """CLI on an unknown notebook basename must exit non-zero."""
+        """CLI on a truly unknown notebook basename must exit non-zero."""
         src = REF_THRESHOLD_NB
-        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        dst = tmp_path / "totally_unknown_notebook.ipynb"
         shutil.copy(src, dst)
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--notebook", str(dst)],
             capture_output=True, text=True,
         )
         assert result.returncode != 0
+
+    def test_ripser_notebook_is_now_supported(self, tmp_path):
+        """features_calculation_ripser_and_templates.ipynb must now be in _SUPPORTED."""
+        dst = tmp_path / "features_calculation_ripser_and_templates.ipynb"
+        shutil.copy(REF_RIPSER_NB, dst)
+        mod = _load_patch_module()
+        # Must NOT raise ValueError — ripser notebook is now supported
+        changed = mod.patch(dst)
+        assert isinstance(changed, bool)
 
 
 # ---------------------------------------------------------------------------
