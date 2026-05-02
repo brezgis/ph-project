@@ -1,10 +1,11 @@
 """Apply replication-specific edits to Kushnareva notebooks.
 
-Supports two notebooks:
+Supports three notebooks:
 - features_calculation_by_thresholds.ipynb
 - features_prediction.ipynb
+- features_calculation_ripser_and_templates.ipynb
 
-Edits for both notebooks:
+Edits for all notebooks:
 1. Prepend a setup cell that adds reference/ and replication/ to sys.path
    and monkey-patches networkx.from_numpy_matrix for networkx 3.x compat.
 
@@ -23,6 +24,13 @@ Edits for features_prediction.ipynb only:
 3. Change test_subset from "test_5k" to "test".
 4. Change input_dir from "./small_gpt_web/" to "../data/processed/".
 5. Repoint feature .npy file paths from input_dir + "features/" to ../outputs/features/.
+
+Edits for features_calculation_ripser_and_templates.ipynb only:
+2. Refactor get_only_barcodes to accept (filename, indices, ...) and load
+   via mmap_mode='r', so the parent never materialises the full tensor.
+3. Replace the barcode loop (cell 29 in 1-indexed reference) with an
+   indices-passing variant: no parent np.load, no split_matricies_and_lengths.
+   Bumps number_of_splits from 2 to 20 for production use.
 
 Idempotent: re-running on an already-patched notebook leaves it unchanged.
 """
@@ -186,6 +194,112 @@ PREDICTION_PATCHES = [
     (OLD_FEATURE_BASE, NEW_FEATURE_BASE),
 ]
 
+# ---------------------------------------------------------------------------
+# Ripser notebook patches (features_calculation_ripser_and_templates.ipynb)
+# ---------------------------------------------------------------------------
+
+# Cell 27 patch — replace only the get_only_barcodes function definition.
+# The other helpers in the same cell (format_barcodes, save_barcodes,
+# unite_barcodes, split_matricies_and_lengths) are left untouched.
+#
+# OLD and NEW strings sourced verbatim from the live notebook via:
+#   import nbformat
+#   nb = nbformat.read("replication/notebooks/features_calculation_ripser_and_templates.ipynb", as_version=4)
+#   print(repr(nb.cells[27].source))
+#
+OLD_GET_ONLY_BARCODES = (
+    'def get_only_barcodes(adj_matricies, ntokens_array, dim, lower_bound):\n'
+    '    """Get barcodes from adj matricies for each layer, head"""\n'
+    '    barcodes = {}\n'
+    '    layers, heads = range(adj_matricies.shape[1]), range(adj_matricies.shape[2])\n'
+    '    for (layer, head) in itertools.product(layers, heads):\n'
+    '        matricies = adj_matricies[:, layer, head, :, :]\n'
+    '        barcodes[(layer, head)] = ripser_count.get_barcodes(matricies, ntokens_array, dim, lower_bound, (layer, head))\n'
+    '    return barcodes'
+)
+
+NEW_GET_ONLY_BARCODES = (
+    'def get_only_barcodes(filename, indices, ntokens_array, dim, lower_bound):\n'
+    '    """Get barcodes from a slice of an attention .npy. Loads via\n'
+    '    mmap so the child process never materializes more than its\n'
+    '    slice; parent never materializes the array body at all."""\n'
+    '    adj_matricies = np.load(filename, mmap_mode=\'r\')[indices]\n'
+    '    barcodes = {}\n'
+    '    layers, heads = range(adj_matricies.shape[1]), range(adj_matricies.shape[2])\n'
+    '    for (layer, head) in itertools.product(layers, heads):\n'
+    '        matricies = adj_matricies[:, layer, head, :, :]\n'
+    '        barcodes[(layer, head)] = ripser_count.get_barcodes(\n'
+    '            matricies, ntokens_array, dim, lower_bound, (layer, head))\n'
+    '    return barcodes'
+)
+
+# Cell 28 patch — replace the entire barcode loop cell.
+# The OLD string is the entire cell 28 source (0-indexed), sourced verbatim
+# from the live notebook. The NEW string removes the parent-side np.load
+# and split_matricies_and_lengths call, passes (filename, indices) instead,
+# and bumps number_of_splits to 20 for production use.
+OLD_BARCODE_LOOP = (
+    "queue = Queue()\n"
+    "number_of_splits = 2\n"
+    "for i, filename in enumerate(tqdm(adj_filenames, desc='Calculating barcodes')):\n"
+    "    barcodes = defaultdict(list)\n"
+    "    adj_matricies = np.load(filename, allow_pickle=True) # samples X \n"
+    '    print(f"Matricies loaded from: {filename}")\n'
+    "    ntokens = ntokens_array[i*batch_size*DUMP_SIZE : (i+1)*batch_size*DUMP_SIZE]\n"
+    "    splitted = split_matricies_and_lengths(adj_matricies, ntokens, number_of_splits)\n"
+    "    for matricies, ntokens in tqdm(splitted, leave=False):\n"
+    "        p = Process(\n"
+    "            target=subprocess_wrap,\n"
+    "            args=(\n"
+    "                queue,\n"
+    "                get_only_barcodes,\n"
+    "                (matricies, ntokens, dim, lower_bound)\n"
+    "            )\n"
+    "        )\n"
+    "        p.start()\n"
+    "        barcodes_part = queue.get() # block until putted and get barcodes from the queue\n"
+    '#         print("Features got.")\n'
+    "        p.join() # release resources\n"
+    '#         print("The process is joined.")\n'
+    "        p.close() # releasing resources of ripser\n"
+    '#         print("The proccess is closed.")\n'
+    "        \n"
+    "        barcodes = unite_barcodes(barcodes, barcodes_part)\n"
+    "    part = filename.split('_')[-1].split('.')[0]\n"
+    "    save_barcodes(barcodes, barcodes_file + '_' + part + '.json')"
+)
+
+NEW_BARCODE_LOOP = (
+    "queue = Queue()\n"
+    "number_of_splits = 20\n"
+    "for i, filename in enumerate(tqdm(adj_filenames, desc='Calculating barcodes')):\n"
+    "    barcodes = defaultdict(list)\n"
+    '    print(f"Processing: {filename}")\n'
+    "    ntokens = ntokens_array[i*batch_size*DUMP_SIZE : (i+1)*batch_size*DUMP_SIZE]\n"
+    "    splitted_ids = np.array_split(np.arange(len(ntokens)), number_of_splits)\n"
+    "    for indices in tqdm(splitted_ids, leave=False):\n"
+    "        p = Process(\n"
+    "            target=subprocess_wrap,\n"
+    "            args=(\n"
+    "                queue,\n"
+    "                get_only_barcodes,\n"
+    "                (filename, indices, ntokens[indices], dim, lower_bound)\n"
+    "            )\n"
+    "        )\n"
+    "        p.start()\n"
+    "        barcodes_part = queue.get()\n"
+    "        p.join()\n"
+    "        p.close()\n"
+    "        barcodes = unite_barcodes(barcodes, barcodes_part)\n"
+    "    part = filename.split('_')[-1].split('.')[0]\n"
+    "    save_barcodes(barcodes, barcodes_file + '_' + part + '.json')"
+)
+
+RIPSER_PATCHES = [
+    (OLD_GET_ONLY_BARCODES, NEW_GET_ONLY_BARCODES),
+    (OLD_BARCODE_LOOP, NEW_BARCODE_LOOP),
+]
+
 
 def _has_cell_with_marker(nb: nbformat.NotebookNode, marker: str) -> bool:
     """True if any cell in *nb* contains *marker* in its source."""
@@ -207,11 +321,12 @@ def patch(nb_path: Path) -> bool:
         changed = True
 
     # Determine which patch set to apply based on notebook name.
-    # Exactly two notebooks are supported; any other name is an error.
+    # Three notebooks are supported; any other name is an error.
     name = nb_path.name
     _SUPPORTED = {
         "features_calculation_by_thresholds.ipynb": THRESHOLD_PATCHES,
         "features_prediction.ipynb": PREDICTION_PATCHES,
+        "features_calculation_ripser_and_templates.ipynb": RIPSER_PATCHES,
     }
     if name not in _SUPPORTED:
         raise ValueError(
