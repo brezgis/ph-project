@@ -60,6 +60,31 @@ python scripts/prepare_csv.py --max-per-class 500
 #      notebooks/features_prediction.ipynb                       (classifier)
 ```
 
+## Running notebooks
+
+Use `scripts/launch_jupyter.sh` instead of invoking `jupyter lab` directly.
+The wrapper places the kernel in a systemd user scope with a memory cap, so a
+runaway cell (such as the ripser barcode loop) kills only the kernel — it does
+not freeze the host.
+
+```bash
+cd /home/anna/ph-project/replication
+bash scripts/launch_jupyter.sh            # defaults: 48 GB RAM cap, 4 GB swap cap
+```
+
+Tune the limits with env vars if needed:
+
+```bash
+JUPYTER_MEM_MAX=32G JUPYTER_SWAP_MAX=2G bash scripts/launch_jupyter.sh
+```
+
+`JUPYTER_MEM_MAX` sets `MemoryMax` (default `48G`); `JUPYTER_SWAP_MAX` sets
+`MemorySwapMax` (default `4G`). Both are passed to `systemd-run --user --scope`.
+
+**Requirement:** the host must run cgroup v2 (`stat -fc %T /sys/fs/cgroup`
+must return `cgroup2fs`). The script will exit immediately with a clear error
+on a cgroup v1 host. North satisfies this requirement.
+
 ## Notebook edits needed
 
 The notebooks in `replication/notebooks/` are unmodified copies of `reference/`.
@@ -116,8 +141,11 @@ replication/
 ├── README.md            this file
 ├── .gitignore           ignores data/ and outputs/
 ├── scripts/
-│   ├── download_webtext.sh   pulls JSONL files from OpenAI's public mirror
-│   └── prepare_csv.py        combines human + machine JSONL into labeled CSVs
+│   ├── download_webtext.sh       pulls JSONL files from OpenAI's public mirror
+│   ├── prepare_csv.py            combines human + machine JSONL into labeled CSVs
+│   ├── patch_notebook.py         applies replication-specific edits to the reference notebooks
+│   ├── predict_threshold_only.py threshold-only classifier path (working end-to-end pipeline)
+│   └── launch_jupyter.sh         systemd-run wrapper that caps kernel memory (see "Running notebooks")
 ├── notebooks/           editable copies of the four reference/ notebooks
 ├── data/                gitignored — raw JSONL and processed CSVs land here
 └── outputs/             gitignored — feature .npy files and classifier outputs
