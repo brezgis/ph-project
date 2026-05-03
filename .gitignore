@@ -20,7 +20,9 @@ env/
 
 # Data — too large or sensitive to commit
 data/corpora/
-data/kwic/
+# data/kwic/: track SCHEMA.md, ignore the generated CSVs and JSON sidecars
+data/kwic/**/*.csv
+data/kwic/**/*.json
 data/attention/
 data/fasttext/
 *.npz
