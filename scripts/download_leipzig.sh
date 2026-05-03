@@ -63,6 +63,9 @@ mkdir -p "$DOWNLOADS_DIR"
 # Array indices must stay in sync.
 # -----------------------------------------------------------------------
 
+# SYNC NOTE: CORPUS_IDS must stay in sync with CORPUS_SOURCE_ID in
+# phase1_kwic/extract.py (Python dict, canonical source of truth).
+# If you add or rename a corpus here, update that dict too.
 CORPUS_IDS=(
     "eng_news_2020_1M"
     "rus_news_2020_1M"

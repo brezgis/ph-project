@@ -54,6 +54,43 @@ if TYPE_CHECKING:
     # the Term type, but canon.py only needs Matcher for the type annotation.
     from phase1_kwic.matchers import Matcher
 
+
+def _lemmatize_ws_token(ws_token: str, matcher: "Matcher") -> str:
+    """Return the canonical lemma for a single whitespace token.
+
+    Calls ``matcher.lemmatize(ws_token)`` and extracts the first alphabetic
+    lemma from the result list.  Falls back to ``ws_token.lower()`` when the
+    result list is empty (e.g. empty-string token, which shouldn't occur in
+    practice) or when no alphabetic lemma is found (e.g. punctuation-only
+    token), in which case the first pair's lemma is used instead.
+
+    This is the single source of truth for "lemmatize one whitespace token,
+    prefer first alphabetic lemma, fall back to ws_token.lower()".  Both
+    ``load_canon`` (when computing ``Term.lemmas``) and the extraction
+    pipeline (when scanning corpus sentences) call this helper so that the
+    lemma space is consistent across both call sites.
+
+    Parameters
+    ----------
+    ws_token : str
+        A single whitespace-split token (a surface form or a corpus word).
+    matcher : Matcher
+        The per-language matcher whose ``lemmatize`` method is used.
+
+    Returns
+    -------
+    str
+        The canonical lemma for *ws_token*.
+    """
+    pairs = matcher.lemmatize(ws_token)
+    if not pairs:
+        return ws_token.lower()
+    lemma = next(
+        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
+        pairs[0][1],
+    )
+    return lemma
+
 # Root of the repo — two levels up from this file (phase1_kwic/canon.py)
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
 _CANON_DIR = _REPO_ROOT / "canon-terms"
@@ -180,26 +217,9 @@ def load_canon(
         # are collapsed by taking the first lemma from the result list for
         # that chunk.
         ws_tokens = surface.split()
-        lemma_parts: list[str] = []
-        for ws_token in ws_tokens:
-            pairs = matcher.lemmatize(ws_token)
-            if pairs:
-                # Prefer the first non-punctuation lemma. For SpacyMatcher on
-                # "father-in-law" the sub-token list is
-                #   [("father","father"), ("-","-"), ("in","in"), ("-","-"), ("law","law")]
-                # so taking the first non-punctuation entry yields "father". A
-                # canon term whose first whitespace token starts with punctuation
-                # (e.g. "'paternal' uncle" if such a thing were ever added) would
-                # otherwise silently lemmatize to the punctuation character.
-                lemma = next(
-                    (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
-                    pairs[0][1],
-                )
-                lemma_parts.append(lemma)
-            else:
-                # Empty result (empty string token — shouldn't happen): passthrough
-                lemma_parts.append(ws_token.lower())
-        lemmas: tuple[str, ...] = tuple(lemma_parts)
+        lemmas: tuple[str, ...] = tuple(
+            _lemmatize_ws_token(ws_token, matcher) for ws_token in ws_tokens
+        )
 
         terms.append(Term(
             surface=surface,
