@@ -116,9 +116,10 @@ def test_url_pattern_uses_tar_gz():
 def test_lang_dir_names_are_short():
     """data/leipzig/<lang>/ must use en/ru/es not eng/rus/spa."""
     text = SCRIPT.read_text()
+    # Require the precise quoted form as it appears in the LANG_DIRS array.
     for lang in LANG_DIRS:
-        assert f"leipzig/{lang}" in text or f'"{lang}"' in text or f"/{lang}/" in text, (
-            f"Short lang dir '{lang}' not referenced in script"
+        assert f'"{lang}"' in text, (
+            f'Short lang dir literal "{lang}" not found in LANG_DIRS array'
         )
     # Also assert the long forms are NOT used as dir names
     for bad in ["leipzig/eng", "leipzig/rus", "leipzig/spa"]:
@@ -177,19 +178,20 @@ def test_skip_sha_env_var_present():
 def test_idempotency_skip_if_tarball_exists():
     """Script must check for existing tarball before downloading."""
     text = SCRIPT.read_text()
-    # Look for the pattern: -f ... tarball path check
-    assert "-f " in text, (
-        "No file-existence check (-f) found — idempotency guard may be missing"
+    # Match the actual guard, not 'rm -f' inside trap cleanups.
+    assert '[[ -f "$tarball_dest" ]]' in text, (
+        "Tarball idempotency guard '[[ -f \"$tarball_dest\" ]]' not found"
     )
 
 
 def test_idempotency_skip_if_sentences_file_exists():
     """Script must check for final sentences file before extracting."""
     text = SCRIPT.read_text()
-    # There should be at least two -f checks (one for tarball, one for sentences)
-    count = text.count("-f ")
-    assert count >= 2, (
-        f"Expected at least 2 file-existence checks (-f) for idempotency, found {count}"
+    # Match the actual guard pattern. Both -f and -s are required since the
+    # script also rejects an empty file as an invalid prior extract.
+    assert '[[ -f "$sentences_file" && -s "$sentences_file" ]]' in text, (
+        "Sentences-file idempotency guard "
+        "'[[ -f \"$sentences_file\" && -s \"$sentences_file\" ]]' not found"
     )
 
 

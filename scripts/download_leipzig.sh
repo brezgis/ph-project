@@ -111,11 +111,15 @@ verify_or_print() {
     actual="$(sha256_of "$file")"
 
     if [[ "$expected" == "TODO" ]]; then
+        # EXPECTED_SHA256 is keyed by corpus ID (e.g., eng_news_2020_1M),
+        # not by tarball filename — strip .tar.gz so the printed hint is
+        # copy-pasteable into the array.
+        local key="${basename%.tar.gz}"
         echo ""
         echo "  *** SHA-256 PLACEHOLDER for $basename ***"
         echo "  Actual sha256: $actual"
         echo "  Record this in scripts/download_leipzig.sh EXPECTED_SHA256:"
-        echo "  [\"$basename\"]=\"$actual\""
+        echo "  [\"$key\"]=\"$actual\""
         echo ""
     else
         if [[ "$actual" == "$expected" ]]; then
@@ -242,9 +246,7 @@ echo "Sentences files:"
 for i in "${!CORPUS_IDS[@]}"; do
     local_file="$DATA_DIR/${LANG_DIRS[$i]}/${CORPUS_IDS[$i]}-sentences.txt"
     if [[ -f "$local_file" ]]; then
-        local_size
         local_size="$(wc -c < "$local_file")"
-        local_lines
         local_lines="$(wc -l < "$local_file")"
         echo "  ${LANG_DIRS[$i]}: $local_file ($local_size bytes, $local_lines lines)"
     else
