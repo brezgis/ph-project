@@ -1,0 +1,89 @@
+% filtration.tex — Vietoris-Rips filtration on a small point cloud
+% Include via \input{figures/filtration} from overview.tex
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    point/.style={circle, fill=black, inner sep=1.8pt},
+    edge/.style={thick, blue!60!black},
+    tri/.style={fill=blue!15, draw=none},
+    panel label/.style={font=\small\bfseries, anchor=north},
+    eps label/.style={font=\small, anchor=north},
+    >=Stealth
+]
+
+% --- Point coordinates (shared across all four panels) ---
+% Six points arranged in a rough cluster with one outlier
+\newcommand{\drawpoints}[1]{
+    \node[point] (A#1) at ($(#1,0) + (0.0, 0.8)$) {};
+    \node[point] (B#1) at ($(#1,0) + (0.7, 1.5)$) {};
+    \node[point] (C#1) at ($(#1,0) + (1.4, 0.9)$) {};
+    \node[point] (D#1) at ($(#1,0) + (0.3, 0.0)$) {};
+    \node[point] (E#1) at ($(#1,0) + (1.1, 0.1)$) {};
+    \node[point] (F#1) at ($(#1,0) + (2.6, 1.2)$) {};
+}
+
+% ---- Panel 1: points only, varepsilon = 0 ----
+\drawpoints{0}
+\node[panel label] at (0.8, -0.5) {(a)};
+\node[eps label] at (0.8, -0.9) {$\varepsilon = 0$};
+
+% ---- Panel 2: a few short edges, varepsilon = 0.9 ----
+\drawpoints{4}
+\draw[edge] (A4) -- (D4);
+\draw[edge] (D4) -- (E4);
+\draw[edge] (A4) -- (B4);
+\node[panel label] at (4.8, -0.5) {(b)};
+\node[eps label] at (4.8, -0.9) {$\varepsilon = 0.9$};
+
+% ---- Panel 3: more edges + a filled triangle, varepsilon = 1.2 ----
+\drawpoints{8}
+% filled triangle A-D-E
+\fill[tri] (A8.center) -- (D8.center) -- (E8.center) -- cycle;
+\draw[edge] (A8) -- (D8);
+\draw[edge] (D8) -- (E8);
+\draw[edge] (A8) -- (E8);
+\draw[edge] (A8) -- (B8);
+\draw[edge] (A8) -- (C8);
+\draw[edge] (B8) -- (C8);
+\draw[edge] (C8) -- (E8);
+\node[panel label] at (8.8, -0.5) {(c)};
+\node[eps label] at (8.8, -0.9) {$\varepsilon = 1.2$};
+
+% ---- Panel 4: all edges, varepsilon = 2.0 ----
+\drawpoints{12}
+% filled triangles
+\fill[tri] (A12.center) -- (D12.center) -- (E12.center) -- cycle;
+\fill[tri] (A12.center) -- (B12.center) -- (C12.center) -- cycle;
+\fill[tri] (A12.center) -- (C12.center) -- (E12.center) -- cycle;
+\fill[tri] (C12.center) -- (E12.center) -- (F12.center) -- cycle;
+% all edges
+\draw[edge] (A12) -- (B12);
+\draw[edge] (A12) -- (C12);
+\draw[edge] (A12) -- (D12);
+\draw[edge] (A12) -- (E12);
+\draw[edge] (B12) -- (C12);
+\draw[edge] (B12) -- (F12);
+\draw[edge] (C12) -- (E12);
+\draw[edge] (C12) -- (F12);
+\draw[edge] (D12) -- (E12);
+\draw[edge] (E12) -- (F12);
+\node[panel label] at (12.8, -0.5) {(d)};
+\node[eps label] at (12.8, -0.9) {$\varepsilon = 2.0$};
+
+% ---- Arrow showing direction ----
+\draw[->, thick, gray] (2.2, -1.4) -- (13.8, -1.4)
+    node[midway, below, font=\small, gray] {$\varepsilon$ increases};
+
+\end{tikzpicture}
+\caption{%
+    Vietoris-Rips filtration on six points at increasing thresholds
+    $\varepsilon$. At $\varepsilon = 0$ only the points exist. As
+    $\varepsilon$ grows, edges appear between points whose distance is at
+    most $\varepsilon$, and filled triangles (2-simplices) appear when all
+    three pairwise edges are present. Tracking how connected components
+    merge ($H_0$) and loops form and fill ($H_1$) across the filtration is
+    the core idea of persistent homology.%
+}
+\label{fig:filtration}
+\end{figure}

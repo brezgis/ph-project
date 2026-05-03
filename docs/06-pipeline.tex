@@ -1,0 +1,115 @@
+\chapter{The Kushnareva pipeline and our adaptation}
+\label{ch:pipeline}
+
+\section{The original task}
+
+\textcite{kushnareva2021} set out to distinguish human-written text from machine-generated text---specifically, WebText (human) from GPT-2 Small 117M output---using topological features extracted from BERT attention graphs. Their claim is simple and elegant: human and machine text produce systematically different \emph{shapes} in the attention map, and those shapes are measurable without fine-tuning the model. A logistic regression over topological features achieves 93--98\% accuracy across three benchmarks \parencite{kushnareva2021}, outperforming count-based and neural baselines while remaining interpretable.
+
+Their full pipeline runs end-to-end as follows. A corpus of labeled sentences (human vs.\ generated) is tokenized with the BERT WordPiece tokenizer, truncated or padded to a fixed length of 128 tokens. Each sentence passes through BERT with \texttt{output\_attentions=True}, yielding one $128 \times 128$ attention matrix per (layer $\ell$, head $h$) pair---that is, $12 \times 12 = 144$ attention matrices per sentence. From each matrix, three families of topological features are extracted. The features for all 144 (layer, head) pairs are concatenated into a single feature vector per sentence, and a logistic regression classifier separates the two classes.
+
+What matters for us is that the classifier is the least interesting part. The expensive, transferable contribution is the feature extraction: a method for turning soft attention into discrete topological invariants. The features describe the \emph{shape} of attention, and shape generalizes. Different inputs produce different shapes; different languages attending differently to the same semantic content will produce different shapes in the same way.
+
+\section{Three feature families}
+
+Kushnareva's pipeline extracts three families of features from each per-(layer, head) attention matrix. \autoref{ch:persistent-homology} introduces the mathematics of persistent homology; here we describe how each family is \emph{computed in the pipeline} and what each one measures about a specific attention matrix.
+
+\subsection{Threshold features}
+
+The simplest family. Given a raw attention matrix $W$ of size $n \times n$ (where $n$ is the token count after padding removal), we binarize it at several thresholds $\varepsilon \in \{0.025, 0.05, 0.1, 0.25, 0.5, 0.75\}$. For each threshold, every entry $W_{ij} \geq \varepsilon$ becomes an edge in a directed graph; entries below $\varepsilon$ vanish. From this binary directed graph we compute:
+
+\begin{itemize}
+  \item The number of \textbf{strongly connected components} (``s''): groups of tokens where every token can reach every other token through directed edges. A high count means attention is fragmented into many isolated clusters at this threshold.
+  \item The number of \textbf{edges} (``e''): how many token pairs exceed the threshold. This is a coarse density measure.
+  \item The \textbf{average vertex degree} (``v''): sum of all degrees divided by node count. Related to edge count but normalized.
+  \item The number of \textbf{simple directed cycles} (``c''): closed loops in the directed graph, capped at 500 for computational sanity.
+  \item \textbf{Betti numbers} $\beta_0$ and $\beta_1$ (``b0b1''): computed on the undirected version of the graph. $\beta_0$ counts connected components; $\beta_1$ counts independent cycles (loops). These are the topological invariants proper.
+\end{itemize}
+
+The output tensor has shape (12 layers $\times$ 12 heads $\times$ 6 feature types $\times$ $N$ samples $\times$ 6 thresholds)---that is, 6 graph statistics at 6 threshold values for each of the 144 attention heads. Kushnareva's code (\texttt{stats\_count.py}) implements this with parallel workers computing \texttt{count\_top\_stats} over batches.
+
+\subsection{Barcode features}
+
+The second family applies Ripser \parencite{bauer2021} to the attention matrix after a filtration transform. The attention matrix is first made symmetric by taking the element-wise maximum of $W$ and $W^\top$---an edge appears when \emph{either} direction exceeds the threshold, which is the most inclusive choice and matches the symmetrization used in \autoref{ch:graphs}. Weights are then inverted ($1 - W_{ij}$) so that high attention becomes short distance, and the diagonal is zeroed. Ripser computes the Vietoris--Rips persistence diagram up to dimension 1 ($H_0$ and $H_1$).
+
+From the resulting persistence pairs $(b_i, d_i)$, Kushnareva extracts 14 scalar summary statistics:
+
+\begin{itemize}
+  \item $H_0$ features: sum of bar lengths (\texttt{h0\_s}), persistence entropy (\texttt{h0\_e}), death time of longest bar (\texttt{h0\_t\_d}), and counts of bars dying above or below various thresholds (\texttt{h0\_n\_d\_m\_t0.75}, \texttt{h0\_n\_d\_m\_t0.5}, \texttt{h0\_n\_d\_l\_t0.25}).
+  \item $H_1$ features: birth time of longest bar (\texttt{h1\_t\_b}), counts at thresholds (\texttt{h1\_n\_b\_m\_t0.25}, \texttt{h1\_n\_b\_l\_t0.95}, \texttt{h1\_n\_b\_l\_t0.70}), sum (\texttt{h1\_s}), entropy (\texttt{h1\_e}), variance (\texttt{h1\_v}), and total number of bars (\texttt{h1\_nb}).
+\end{itemize}
+
+The $H_0$ features characterize how quickly the graph becomes connected as the filtration parameter grows: a sentence where attention concentrates on a few tokens produces a persistence diagram with few long bars (one dominant component absorbs the others early). The $H_1$ features measure loops---cyclic attention structures that survive over a range of filtration values. These are the most topologically interesting: a 1-cycle that persists across a wide range of $\varepsilon$ values indicates a robust cyclic attention pattern that is not an artifact of a single threshold choice.
+
+\subsection{Template features}
+
+The third family measures how closely each attention matrix resembles six template patterns that \textcite{clark2019} identified as common in BERT:
+
+\begin{itemize}
+  \item \textbf{Self}: attention to the same token (identity matrix).
+  \item \textbf{Previous token}: attention to the immediately preceding token.
+  \item \textbf{Next token}: attention to the immediately following token.
+  \item \textbf{Beginning}: attention to the \texttt{[CLS]} token (first column all ones).
+  \item \textbf{Comma}: attention to comma tokens.
+  \item \textbf{Period}: attention to period tokens.
+\end{itemize}
+
+The distance metric is a normalized Frobenius norm: $\|W - T\|_F / \sqrt{\|W\|_F^2 + \|T\|_F^2}$, producing a value in $[0, 1]$ where 0 means exact match. For the punctuation templates, the template is constructed per-sentence (because comma positions differ), and the distance uses the elementwise broadcast form.
+
+These features are not topological in the formal sense, but they ground the topological features in linguistic interpretability. A head that attends strongly to the previous token (a ``positional'' head) will produce very different filtration structure than a head that attends to all commas (a ``syntactic'' head). The template distances tell us \emph{which kind of head} we are looking at.
+
+\section{The pipeline diagram}
+
+\autoref{fig:pipeline} shows the end-to-end pipeline for both Kushnareva's original task and our adaptation. The first five steps are shared; the divergence occurs at the comparison stage.
+
+\input{figures/pipeline}
+
+\section{What we keep}
+
+We preserve four things from the original pipeline.
+
+\textbf{The same feature families.} All three families---threshold, barcode, and template---transfer directly. The features characterize \emph{shape}, and shape is shape regardless of whether the underlying text is English web prose or Russian kinship terms in context.
+
+\textbf{The same model class.} Kushnareva used monolingual BERT (\texttt{bert-base-uncased}). We use multilingual BERT (\texttt{bert-base-multilingual-cased}), which shares the same architecture: 12 layers, 12 heads per layer, 768-dimensional hidden states, 128-token max sequence length. The architectural identity means the feature extraction code transfers without modification---the attention tensors have the same shape. We need mBERT because our three languages must share a single vector space for cross-linguistic distances to be meaningful \parencite{pires2019}.
+
+\textbf{Per-(layer, head) extraction.} Kushnareva computes features for all 144 attention heads independently, then concatenates them for classification. We do the same extraction, but analyze heads individually for cross-linguistic comparison (some heads may specialize in syntax, others in semantics; the interesting cross-linguistic differences may concentrate in specific heads).
+
+\textbf{Notebook structure and function names.} The frozen \texttt{reference/} tree in our repository holds Kushnareva's original code. Our adapted notebooks in \texttt{notebooks/} follow their structure and call the same core functions (\texttt{grab\_attention\_weights}, \texttt{count\_top\_stats}, \texttt{get\_barcodes}, \texttt{count\_ripser\_features}, \texttt{count\_template\_features}). Where the modern \texttt{transformers} library has deprecated the old tokenizer API, we shim it with a four-line compatibility wrapper (\texttt{replication/grab\_weights\_compat.py}) rather than modifying the reference code.
+
+\section{What we change}
+
+\textbf{Inputs.} Instead of 5,000 WebText/GPT-2 sentence pairs, our corpus consists of KWIC (keyword-in-context) sentences drawn from the Leipzig Corpora for each (language, domain) combination. Each canon term (11--34 per language-domain pair, sourced from published linguistics literature: \textcite{berlin1969} for color, \textcite{wierzbicka1999} for emotion, \textcite{murdock1949} for kinship) is queried for concordance sentences, giving us naturalistic contexts where the target concept is active. The sentence is what passes through mBERT---not the bare term.
+
+\textbf{Comparison method.} Kushnareva feeds the concatenated feature vector into a logistic regression and optimizes classification accuracy. We have no binary label to classify. Instead, we compare the \emph{distributions} of topological features across languages within the same semantic domain. The statistical tools are:
+
+\begin{itemize}
+  \item \textbf{Mann-Whitney $U$ tests}: non-parametric comparison of feature distributions between language pairs (e.g., are $H_1$ sum-of-bar-lengths for Russian color terms significantly different from English color terms at layer 8 head 3?).
+  \item \textbf{Permutation tests}: where sample sizes are small (some canon term lists have 11--12 entries), we bootstrap significance by shuffling language labels and recomputing the test statistic.
+  \item \textbf{Bottleneck and Wasserstein distances}: direct comparison of persistence diagrams between languages without reducing to scalar features first. These distances have stability guarantees \parencite{cohensteiner2007}---small perturbations in the input produce small perturbations in the diagram---which makes them robust to noise in the KWIC sampling.
+\end{itemize}
+
+\textbf{Target.} Kushnareva maximizes accuracy on a binary classification task. We test four pre-registered predictions about cross-linguistic divergence in topological structure: that color shows the most consistent universal structure, that emotion shows the greatest divergence, that kinship falls between them, and that language-specific structure concentrates in specific (layer, head) combinations rather than diffusing across all heads.
+
+\section{Why the features generalize}
+
+Kushnareva's features describe the \emph{shape} of attention---how connected, how cyclic, how clustered, how similar to known linguistic templates. These properties are content-agnostic. When a speaker of Russian processes a color term in context, the attention graph acquires a shape that reflects whatever structural regularities the model has learned for that language and that semantic domain. When a speaker of English processes the translation-equivalent term, the attention graph acquires a potentially different shape---because the distributional contexts are different, because the morphological marking is different, because the conceptual boundaries are different.
+
+If the shapes are the same, that would indicate that mBERT's attention mechanism encodes the semantic domain similarly across languages despite surface differences. If the shapes differ, that is evidence for our hypothesis: that distributional patterns in language encode culturally-specific attentional structures that show up as different topology.
+
+The features themselves do not need modification. Only the question we ask of them changes.
+
+\section{In-flight status}
+
+Our adaptation is organized as a series of dependent phases tracked through the \texttt{bd} issue system.
+
+\textbf{Phase 1 --- KWIC extraction} (epic \texttt{5f9}): complete. Canon term lists for all nine (language, domain) combinations have been finalized and concordance sentences extracted from the Leipzig Corpora.
+
+\textbf{Phase 2 --- fastText baseline} (epic \texttt{ssa}): partial. Sub-baseline A (descriptive clustering on fastText CC-300) is complete; sub-baselines B (topological) and C (cross-lingual aligned) are in flight. These baselines use static embeddings rather than mBERT attention---they establish whether cross-linguistic differences are visible even without the transformer attention mechanism, and provide a comparison floor for the main experiment.
+
+\textbf{Kushnareva rewrite} (epic \texttt{mwk}): partial. The \texttt{grab\_weights} port (\texttt{mwk.1}) adapts the attention extraction to mBERT with the modern \texttt{transformers} API. Notebook adaptations (\texttt{mwk.2}--\texttt{mwk.4}) port the three feature-calculation notebooks.
+
+\textbf{Phase 3 --- mBERT + PH} (epic \texttt{0cm}): blocked on \texttt{mwk}. Once the adapted notebooks are running, this phase computes the full topological feature tensors for all nine (language, domain) combinations.
+
+\textbf{Phase 4 --- comparison and prediction tests} (epic \texttt{bt5}): not started; depends on Phase 3 output. This is where Mann-Whitney tests, permutation testing, and diagram-level distances are computed and the four predictions are evaluated.
+
+\textbf{Replication subtree} (\texttt{replication/}): a parallel effort that runs the original Kushnareva pipeline end-to-end on its native binary classification task. This is not a project deliverable---it exists for stack verification, feature intuition, and reference numbers that confirm our port produces the same shapes from the same inputs.
+

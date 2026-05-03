@@ -1,0 +1,81 @@
+% overview.tex — main document for ph-project textbook overview
+% Compile with: lualatex (or xelatex) via latexmk
+\documentclass[11pt,a4paper]{report}
+
+% --- Fonts (LuaLaTeX) ---
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+% Latin Modern (default) lacks Cyrillic. Set up a luaotfload font fallback so
+% bare Cyrillic codepoints render via DejaVu Serif, which has a similar
+% academic feel and good Cyrillic coverage. Any character not in Latin Modern
+% (Cyrillic in particular) is drawn from the fallback family.
+\directlua{
+  luaotfload.add_fallback("cyrfallback", { "DejaVu Serif:script=cyrl;" })
+}
+\setmainfont{Latin Modern Roman}[RawFeature={fallback=cyrfallback}]
+% Latin Modern Mono lacks box-drawing characters used in chapter 7's tree
+% diagram; DejaVu Sans Mono covers the BOX DRAWING block.
+\setmonofont{DejaVu Sans Mono}[Scale=MatchLowercase]
+% \cyr{...} from chapter 1 is now redundant; provide a no-op so the chapter
+% still compiles standalone or in the assembled document.
+\providecommand{\cyr}[1]{#1}
+
+% --- Mathematics ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+
+% --- Graphics and diagrams ---
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{tikz}
+\usetikzlibrary{positioning, calc, fit, arrows.meta, decorations.pathreplacing, shapes.geometric}
+\usepackage{float}
+
+% --- Bibliography ---
+\usepackage[style=authoryear, backend=biber, natbib=true]{biblatex}
+\addbibresource{refs.bib}
+
+% --- Cross-references and hyperlinks ---
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=green!40!black,
+  urlcolor=blue!70!black
+}
+
+% --- Title ---
+\title{%
+  \textbf{Cross-Linguistic Semantic Comparison via Persistent Homology on mBERT Attention Graphs}\\[0.5em]
+  \large A textbook-style overview of ph-project%
+}
+\author{Anna Brezgis}
+\date{\today}
+
+% =============================================================================
+\begin{document}
+
+\maketitle
+\tableofcontents
+\listoffigures
+
+% --- Chapters ---
+\input{01-motivation}
+\input{02-humanities}
+\input{03-attention}
+\input{04-graphs}
+\input{05-persistent-homology}
+\input{06-pipeline}
+\input{07-codebase}
+\input{08-tooling}
+\input{09-results}
+
+% Figures live in figures/. Each chapter \inputs the figures it owns:
+%   ch5 \inputs filtration.tex and persistence-diagram.tex
+%   ch6 \inputs pipeline.tex
+
+% --- Bibliography ---
+\printbibliography
+
+\end{document}

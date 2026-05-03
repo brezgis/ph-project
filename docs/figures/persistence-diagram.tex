@@ -1,0 +1,77 @@
+% persistence-diagram.tex — example persistence diagram (birth vs death)
+% Include via \input{figures/persistence-diagram} from overview.tex
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    >=Stealth,
+    h0point/.style={circle, fill=blue!70!black, inner sep=2.5pt},
+    h1point/.style={diamond, fill=red!70!black, inner sep=2.5pt},
+    annotation/.style={font=\small, anchor=west},
+]
+
+% Axes
+\draw[->, thick] (-0.3, 0) -- (5.5, 0)
+    node[anchor=north, font=\small] {birth};
+\draw[->, thick] (0, -0.3) -- (0, 5.5)
+    node[anchor=east, font=\small] {death};
+
+% Diagonal y = x
+\draw[gray, dashed, thin] (0, 0) -- (5.2, 5.2);
+\node[gray, font=\footnotesize, rotate=45, anchor=south] at (4.2, 4.2) {$y = x$};
+
+% --- H_0 features (blue circles) ---
+% Feature 1: born at 0, dies at 0.9 (short-lived component merge)
+\node[h0point] (h0a) at (0, 0.9) {};
+
+% Feature 2: born at 0, dies at 1.2
+\node[h0point] (h0b) at (0, 1.2) {};
+
+% Feature 3: born at 0, never dies (essential feature) — plot near top
+\node[h0point] (h0c) at (0, 5.0) {};
+\draw[blue!70!black, thick, dashed] (h0c) -- (0, 5.4);
+
+% --- H_1 features (red diamonds) ---
+% Feature 4: born at 0.9, dies at 1.2 (short-lived loop)
+\node[h1point] (h1a) at (0.9, 1.2) {};
+
+% Feature 5: born at 0.7, dies at 2.0 (longest-lived loop — the one we mark)
+\node[h1point] (h1b) at (0.7, 2.0) {};
+
+% --- Annotate longest-living feature ---
+\draw[red!70!black, thin, ->] (1.8, 2.6) -- ($(h1b) + (0.15, 0.15)$);
+\node[annotation, red!70!black] at (1.8, 2.6) {longest-lived $H_1$ feature};
+
+% --- Annotate essential component ---
+\draw[blue!70!black, thin, ->] (1.2, 4.8) -- ($(h0c) + (0.15, 0.0)$);
+\node[annotation, blue!70!black] at (1.2, 4.8) {essential component ($\infty$)};
+
+% --- Persistence as vertical distance from diagonal ---
+% Show for the longest-lived H_1 feature
+\draw[red!50!black, thin, dotted] (0.7, 0.7) -- (h1b);
+\node[font=\scriptsize, red!50!black, anchor=west] at (0.85, 1.35) {persistence};
+
+% Axis tick marks
+\foreach \x in {1, 2, 3, 4, 5} {
+    \draw (\x, 0.07) -- (\x, -0.07) node[below, font=\scriptsize] {\x};
+    \draw (0.07, \x) -- (-0.07, \x) node[left, font=\scriptsize] {\x};
+}
+
+% Legend
+\node[h0point, label={[font=\footnotesize]right:$H_0$ (components)}]
+    at (3.5, 4.8) {};
+\node[h1point, label={[font=\footnotesize]right:$H_1$ (loops)}]
+    at (3.5, 4.3) {};
+
+\end{tikzpicture}
+\caption{%
+    A persistence diagram plots each topological feature as a point at
+    coordinates (birth, death). Features far from the diagonal $y = x$
+    persist across a wide range of $\varepsilon$ and represent robust
+    structure; features near the diagonal are short-lived noise. $H_0$
+    features (blue circles) track connected components; $H_1$ features (red
+    diamonds) track loops. The dashed extension marks an essential component
+    that never dies.%
+}
+\label{fig:persistence-diagram}
+\end{figure}

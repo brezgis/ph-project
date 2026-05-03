@@ -1,0 +1,111 @@
+\chapter{Results and open questions}
+\label{ch:results}
+
+\section{Where things stand}
+
+We are writing this chapter on May 3, 2026, three days before the project deadline. That timing is part of the story. The pipeline we have described in the preceding chapters---from canon-term curation through mBERT attention extraction through persistent homology---is partially built and partially tested. We have a complete fastText baseline for descriptive clustering, a working Kushnareva replication on the original binary-classification task, and an in-progress port of the topological pipeline to our cross-linguistic question. We do not yet have topological features computed on our own data. This chapter is an honest accounting of what exists, what the existing results suggest, and what remains open.
+
+\section{Completed work}
+
+\subsection{Canon term lists}
+
+All three semantic domains---color, emotion, kinship---have literature-grounded canon term lists for English, Russian, and Spanish \parencite{berlin1969, wierzbicka1999, murdock1949}. These are complete and frozen: 11 English color terms, 12 Russian (including the синий/голубой split), 11 Spanish; 18 English emotion terms, 19 Russian, 22 Spanish; 27 English kinship terms, 34 Russian, 32 Spanish. Every term traces to a published source. The Russian kinship list alone contains 34 entries, reflecting the granularity that \textcite{friedrich1964} documented---lexicalized distinctions for in-laws and paternal/maternal lines that English collapses into compounds.
+
+\subsection{FastText baseline A: descriptive clustering}
+
+We ran hierarchical clustering and silhouette analysis on language-specific fastText CC-300 vectors for all nine (language $\times$ domain) combinations. The results (\autoref{tab:baseline-a}) are already informative, though they operate on static embeddings rather than contextual attention.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llccc}
+\hline
+Language & Domain & Terms found & Best $k$ & Silhouette \\
+\hline
+EN & color    & 11 & 8 & 0.072 \\
+EN & emotion  & 18 & 3 & $-0.028$ \\
+EN & kinship  & 27 & 2 & $-0.053$ \\
+ES & color    & 11 & 6 & 0.052 \\
+ES & emotion  & 22 & 2 & 0.007 \\
+ES & kinship  & 32 & 2 & 0.030 \\
+RU & color    & 12 & 4 & 0.098 \\
+RU & emotion  & 19 & 2 & 0.104 \\
+RU & kinship  & 34 & 2 & 0.177 \\
+\hline
+\end{tabular}
+\caption{Baseline A: best silhouette scores from $k$-means sweep on fastText cosine-distance matrices per (language, domain).}
+\label{tab:baseline-a}
+\end{table}
+
+Two patterns jump out. First, Russian shows the highest silhouette scores across all three domains. Its color terms cluster into 4 groups (best $k = 4$) with a silhouette of 0.098, while English color terms prefer $k = 8$ but achieve a lower silhouette of 0.072. This is not yet evidence for our predictions---static embeddings are not attention matrices---but it suggests that the Russian lexicon imposes cleaner categorical boundaries in vector space than English or Spanish do, at least as measured by distributional co-occurrence in web corpora.
+
+Second, negative silhouette scores for English emotion and kinship indicate that the optimal clustering is barely better than random assignment. English emotion and kinship terms do not form well-separated groups in fastText space. Russian terms do---modestly for emotion (0.104), substantially for kinship (0.177). If this pattern persists in mBERT attention topology, it supports predictions \#2 (emotion divergence) and \#3 (Russian kinship complexity).
+
+\subsection{Kushnareva replication}
+
+We successfully replicated the core \textcite{kushnareva2021} pipeline on their original task---binary classification of human-written (WebText) vs.\ machine-generated (GPT-2) text. The replication ran end-to-end: attention extraction, threshold-based features, ripser-based barcodes, and logistic regression prediction. The threshold notebook executes cleanly; the ripser notebook required memory patches to survive on our hardware (64\,GB RAM; see below) but ultimately produced valid barcode features.
+
+This replication matters because it confirms our pipeline computes the same topological features Kushnareva's code does. Our adaptation changes only the \emph{inputs}---cross-linguistic KWIC sentences instead of WebText/GPT-2---and the \emph{analysis}---comparison across languages instead of binary classification. The computational core is validated.
+
+\section{Work in progress}
+
+\subsection{Baseline B: topological features on static embeddings}
+
+The natural bridge between Baseline A (clustering) and the main experiment (mBERT attention topology) is computing persistent homology directly on the fastText distance matrices. This baseline is in progress: the \texttt{baselines/topology.py} module is being built with input validation designed to catch a known failure mode from a prior project attempt (ripser returning empty barcodes on degenerate input). When complete, it will produce full Kushnareva-style barcode features ($H_0$ and $H_1$ statistics) on static embeddings for all nine (language $\times$ domain) cells.
+
+This baseline is the primary foil for the whole project. If the topological features on static embeddings already show the predicted cross-linguistic differences, then mBERT's contextual representations are not necessary to detect them---the signal lives in co-occurrence statistics alone. If the static baseline shows \emph{no} topological differentiation but mBERT does, that is strong evidence that contextual attention captures something that distributional similarity misses.
+
+\subsection{Pipeline port (mwk epic)}
+
+The notebook-faithful rewrite of Kushnareva's pipeline for cross-linguistic use is blocked on its first task: porting \texttt{grab\_weights.py} to extract mBERT attention matrices from our KWIC sentences rather than from WebText. The adaptation is conceptually straightforward---swap the corpus, keep the extraction logic---but has not yet been executed. Until it runs, we have no mBERT attention matrices for our terms, and Phases 3 and 4 (topological features and statistical comparison) cannot begin.
+
+\subsection{KWIC extraction (Phase 1)}
+
+KWIC sentence extraction from Leipzig Corpora is planned but not yet executed as a batch process. The infrastructure exists (the canon term lists define what to extract; the pipeline knows where to look) but the actual extraction run has not happened.
+
+\section{Known obstacles}
+
+The ripser notebook OOM bug consumed significant engineering time. The Kushnareva ripser notebook (cell 29) crashed our machine repeatedly---not because of parallel-process amplification (as initially diagnosed) but because of parent-side memory bloat. Loading the full attention tensor ($\sim$4.7\,GB for 1000 samples $\times$ 12 layers $\times$ 12 heads $\times$ 128 $\times$ 128, fp16) plus creating array copies via fancy indexing pushed the kernel past available memory. The fix involved refactoring to fork-and-mmap: the parent writes the array to a memory-mapped file, and each child subprocess maps only its slice. This patch is merged and tested, but the debugging cycle cost days of project time.
+
+Two lower-priority bugs remain open. The patching system for the ripser notebook is incomplete (missing subset/path/tokenizer patches that the docstring promises), and the barcode-loop patch is brittle---it hardcodes a \texttt{splits=2} value that breaks if anyone changes the constant upstream. Neither blocks the main experiment, but both reflect the fragility of working with notebooks-as-code.
+
+\section{What the predictions need}
+
+We pre-registered four predictions in \autoref{ch:motivation}. Here is what each one requires to become testable, and where we stand:
+
+\textbf{Prediction \#1: Russian blue split.} Requires mBERT attention matrices for color terms in all three languages, followed by persistent homology computation at the per-term level. We need to see an additional $H_0$ feature in the Russian blue region (a connected component that persists across a meaningful range of $\varepsilon$ values) absent from English and Spanish. Not yet testable---we lack mBERT attention matrices for our terms.
+
+\textbf{Prediction \#2: Emotion divergence $>$ color divergence.} Requires topological features for both domains across all three languages, plus a cross-linguistic distance metric (bottleneck or Wasserstein distance between persistence diagrams). The Baseline A silhouette data is weakly consistent---emotion shows poorer clustering than color in English, suggesting less universal structure---but the formal test requires mBERT topology. Not yet testable at the primary level; suggestive at the baseline level.
+
+\textbf{Prediction \#3: Russian kinship complexity.} Requires the same pipeline as \#1 but on kinship terms. The Baseline A data already shows that Russian kinship has the highest silhouette (0.177) and the most terms (34), but topological complexity (many persistent $H_0$ and $H_1$ features) is a different claim from cluster quality. Not yet testable at the primary level.
+
+\textbf{Prediction \#4: Head specialization.} Requires attention matrices broken out by layer and head, with per-head topological features compared across languages. This is the most computationally demanding test and depends on the full pipeline running end-to-end. Not yet testable.
+
+\section{What would it take to scale}
+
+The three-language test case was chosen to be minimal but productive: two languages (English, Spanish) that share an 11-term basic color system plus one (Russian) that adds a 12th term \parencite{berlin1969, paramei2005, lillo2018}. Scaling beyond this requires:
+
+\emph{More languages.} mBERT covers 104 languages. Languages with documented unusual color systems---Pirah\~{a} (minimal terms), Turkish (additional blue distinction), Japanese (green/blue boundary)---would strengthen or weaken the topological hypothesis. Each additional language costs one KWIC extraction run plus one mBERT forward pass per sentence, but the persistent homology computation is cheap once attention matrices exist.
+
+\emph{More domains.} Spatial relations (languages differ in how they partition space), quantifiers (numeral systems vary), and body-part terminology (boundaries between ``hand'' and ``arm'' differ cross-linguistically) all have documented variation with published term lists.
+
+\emph{Larger context windows.} Our KWIC sentences are short ($\sim$128 tokens). Discourse-level attention patterns might show topological structure invisible at the sentence level, but mBERT's 512-token limit constrains this.
+
+\emph{Beyond mBERT.} XLM-RoBERTa, mT5, and newer multilingual models have different architectures and training regimes. If our topological findings are mBERT-specific artifacts of its particular training data distribution rather than reflections of genuine linguistic structure, they should not replicate on other multilingual models. This is a crucial control we cannot run within the current project timeline but that any follow-up would require.
+
+\section{What would falsify the hypothesis}
+
+If we complete the pipeline and find:
+\begin{itemize}
+  \item No additional $H_0$ structure in Russian blue attention patterns despite the known perceptual boundary,
+  \item No systematic relationship between cultural variability of a domain and cross-linguistic topological distance,
+  \item Topological features uniformly distributed across attention heads with no specialization,
+\end{itemize}
+then our hypothesis---that linguistically-mediated attentional structures leave topological traces in mBERT---is disconfirmed, at least for this pipeline and this model.
+
+The interesting question is what partial failure would mean. If prediction \#1 (Russian blue) fails but \#2 (emotion $>$ color) succeeds, that tells us something specific: mBERT may encode \emph{density} differences across semantic domains without encoding the fine-grained categorical boundaries within a domain. If \#4 (head specialization) fails while \#1--\#3 succeed, it suggests that semantic-domain topology is distributed across heads rather than localized---still a finding, but one that complicates the clean story.
+
+\section{What we would do with more time}
+
+In decreasing order of priority: complete the mBERT pipeline port and run all four prediction tests; compute Baseline B (PH on static embeddings) as the primary foil; add Wasserstein distances between persistence diagrams as a scalar comparison metric \parencite{cohensteiner2007}; run the full pipeline on XLM-RoBERTa as a replication control; expand to Japanese and Turkish for the color domain.
+
+The project as designed is too large for a single-semester course project. We knew this at the outset. The value is in the architecture---the question is well-posed, the methodology is validated by replication, the predictions are falsifiable, and the pipeline is modular enough that any stage can be completed independently. What we have built is a research program with a clear first experiment, not a finished experiment with a clear result.

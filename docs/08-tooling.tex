@@ -1,0 +1,99 @@
+\chapter{Tooling and infrastructure}
+\label{ch:tooling}
+
+Every research project has a layer that nobody wants to write about: the environment, the package versions, the reason the build broke on a Tuesday and took three hours to fix. This chapter is that layer, made legible. We write it down because the alternative --- rediscovering it from stack traces six months later --- is worse.
+
+\section{The machine}
+
+Our compute environment is a single workstation called \texttt{north}: an NVIDIA RTX 5070 Ti with 16\,GB of VRAM, backed by 64\,GB of system RAM, running Ubuntu with a Linux 6.8 kernel. The GPU is not a cluster node; it sits under a desk. This shapes every design decision downstream.
+
+Why does 16\,GB of VRAM matter? Because mBERT's forward pass on a batch of 128-token sequences is not the bottleneck --- it fits comfortably in 4--5\,GB. The constraint bites when we run \texttt{ripserplusplus} on the GPU for barcode computation. Ripser++ allocates working memory proportional to the square of the number of vertices in the Vietoris--Rips complex it builds. On attention matrices of size $128 \times 128$, a single head's computation is small, but running many heads in sequence without proper cleanup accumulates leaked GPU memory across calls. The 16\,GB ceiling means we cannot simply throw batch size at the problem; we split, we fork, we let the OS reclaim.
+
+The 64\,GB of system RAM sounds generous until a notebook tries to hold a 4.7\,GB attention tensor in the parent process while simultaneously forking children that inherit that memory via copy-on-write. That exact scenario --- diagnosed as issue \texttt{ph-project-wz1} --- froze north multiple times before we traced the cause to parent-side array duplication via NumPy fancy indexing. The fix (spawn-context multiprocessing with child-side memory-mapped loading) works, but the episode taught us to treat RAM as a budget, not a buffer.
+
+\section{The Python environment}
+
+How do we make this reproducible? We pin versions. The project uses a single virtual environment (\texttt{.venv/}) at the repository root, activated with \texttt{source .venv/bin/activate}, and a \texttt{requirements.txt} that installs via:
+
+\begin{verbatim}
+pip install -r requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cu124
+\end{verbatim}
+
+The \texttt{--extra-index-url} flag is the key detail. PyPI's default PyTorch wheels ship CPU-only; the CUDA 12.4 wheels live on PyTorch's own index. Without this flag, \texttt{torch} installs successfully but silently lacks GPU support --- a failure mode that surfaces only when you call \texttt{torch.cuda.is\_available()} and get \texttt{False}. We verify at setup time:
+
+\begin{verbatim}
+python -c "import torch; print(torch.cuda.is_available(),
+                                torch.cuda.get_device_name(0))"
+\end{verbatim}
+
+The package stack, at a high level: \texttt{torch} (CUDA 12.4) and \texttt{transformers} for mBERT; \texttt{ripser} and \texttt{ripserplusplus} for persistent homology computation; \texttt{giotto-tda} for persistence diagrams and Betti curves; \texttt{gensim} for fastText embeddings used in the distributional baselines; \texttt{scikit-learn}, \texttt{scipy}, and \texttt{numpy} for statistics and classification; \texttt{networkx} for graph construction; \texttt{matplotlib} and \texttt{seaborn} for visualization.
+
+\subsection{The ripserplusplus pin}
+
+This deserves its own telling because, undocumented, it costs days. Ripserplusplus is the GPU-accelerated Ripser implementation that \textcite{kushnareva2021} used for barcode computation. The version on PyPI (1.1.2) does not compile against CUDA 12 or later. The NVIDIA Thrust API changed between CUDA 11 and 12, breaking template instantiation in ripser++'s kernel code. The upstream repository has the fix --- merged via pull request \#14 in 2023 --- but was never re-released to PyPI.
+
+Our \texttt{requirements.txt} pins directly to the fixed commit:
+
+\begin{verbatim}
+ripserplusplus @ git+https://github.com/simonzhang00/
+    ripser-plusplus.git@30243c0c752de26d7fdf6e41f08bf7b840ca4744
+\end{verbatim}
+
+Building from this commit requires \texttt{nvcc} (the CUDA compiler) and a CUDA toolkit whose major version matches torch's. On north, that means CUDA 12.4 toolkit system-wide. The build takes several minutes and produces no output until it either succeeds or fails with an incomprehensible template error. We document it here so nobody else has to bisect the commit history to find the fix.
+
+\section{The cgroup-capped kernel}
+\label{sec:cgroup-kernel}
+
+We established that ripser's barcode loops can consume unbounded memory. The \texttt{ph-project-wz1} OOM episodes froze the entire host --- not just the notebook kernel, but the desktop session, SSH, everything. A crashed kernel is recoverable; a frozen 64\,GB machine requires a hard power cycle and loses any unsaved state in other applications.
+
+The defense-in-depth solution: run every Jupyter kernel inside a Linux cgroup v2 memory scope. If the kernel exceeds its allocation, the kernel dies. North keeps running.
+
+The implementation lives in three files under \texttt{replication/scripts/}:
+
+\texttt{launch\_jupyter.sh} wraps \texttt{jupyter lab} in a \texttt{systemd-run --user --scope} invocation with \texttt{MemoryMax} and \texttt{MemorySwapMax} properties set. Default limits: 48\,GB RAM, 4\,GB swap. These leave 16\,GB of headroom for the desktop session and system services on a 64\,GB host. The limits are tunable via environment variables (\texttt{JUPYTER\_MEM\_MAX}, \texttt{JUPYTER\_SWAP\_MAX}).
+
+\texttt{launch\_kernel.sh} does the same thing but for a single kernel process. This is what VS Code's notebook interface calls when you select the capped kernel.
+
+\texttt{install\_kernel\_spec.py} registers a Jupyter kernel spec at \texttt{\textasciitilde/.local/share/jupyter/kernels/ph-project-capped/kernel.json}, pointing its \texttt{argv} at \texttt{launch\_kernel.sh}. After running it once, the kernel appears in VS Code's picker as ``Python 3 (ph-project, capped)''. Every kernel start spawns inside a fresh cgroup scope. The cgroup-v2 requirement is enforced: both shell scripts check \texttt{stat -fc \%T /sys/fs/cgroup} and refuse to run on cgroup-v1 hosts.
+
+Why \texttt{systemd-run --user --scope} rather than, say, \texttt{ulimit}? Because \texttt{ulimit} sets per-process limits, and a forked child gets its own limit. The parent process might be fine; the child might be fine; but their combined RSS can still exceed physical memory. A cgroup wraps the entire process tree under a single accounting boundary. If the kernel forks twenty children for split-wise barcode computation, all of them live under the same 48\,GB cap.
+
+\section{Notebook tooling}
+
+Anna runs notebooks in VS Code, not in a browser-based JupyterLab session. VS Code's notebook interface connects to the same Jupyter kernel server but embeds it in the editor alongside the terminal, the file tree, and the git integration. The capped kernel works identically in both environments --- it is a kernel spec, not a JupyterLab extension.
+
+The workflow: open a \texttt{.ipynb} file in VS Code, click the kernel picker in the top-right corner, select ``Python 3 (ph-project, capped)'', and run cells. If a cell triggers the OOM killer, VS Code reports the kernel as dead and offers to restart it. North stays responsive.
+
+\section{Issue tracking with bd}
+
+Why not a \texttt{TODO.md} at the repository root? Because TODO files have no dependency graph, no status transitions, and no way to ask ``what is unblocked right now?'' The project uses \textbf{bd} (beads) for all task tracking --- a git-friendly issue tracker that stores state in \texttt{.beads/issues.jsonl} and auto-syncs with the repository.
+
+Beads gives us dependency-aware issues: each task can declare what blocks it, and \texttt{bd ready} returns only issues whose dependencies are all closed. This matters when the project has parallel workstreams (replication, adaptation, baselines, textbook writing) that interleave and occasionally block each other.
+
+The workflow integrates with an agent-workflow setup from \texttt{jdelfino/agent-workflow}. Four slash commands organize sessions:
+
+\begin{description}
+\item[\texttt{/plan}] creates an epic with sub-issues from a natural-language description. Explores the codebase, discusses tradeoffs, files structured tickets.
+\item[\texttt{/work}] picks up an issue by ID, creates a branch, implements, runs quality gates, opens a PR.
+\item[\texttt{/merge}] processes the PR queue --- merges when CI passes, rebases, files issues for failures.
+\item[\texttt{/fire}] emergency context dump when something breaks mid-session and state needs to be preserved for the next agent or human to pick up.
+\end{description}
+
+Every issue filed through this system is self-contained: it includes the summary, the files to modify, numbered implementation steps, and acceptance criteria. A future session can pick up any ready issue and implement it without reading chat history. The pattern eliminates the ``what was I doing?'' problem that plagues multi-session projects.
+
+\section{Repository hygiene}
+
+The repository enforces a few invariants that keep the working tree navigable:
+
+\texttt{data/} and \texttt{results/} are gitignored. Attention matrices, KWIC extracts, feature tensors, and classifier outputs are large, binary, and regenerable from the pipeline. They do not belong in version control.
+
+\texttt{reference/} is frozen. It holds the original Kushnareva source code for line-by-line comparison. No agent, no automated tool, no well-meaning cleanup pass may edit it. When we need to adapt a function, we write a compatibility shim (like \texttt{grab\_weights\_compat.py}) that lives outside the frozen tree and imports from it.
+
+Branches follow a convention: \texttt{feature/replication-4zo} for the replication epic, \texttt{feature/textbook-overview-p9f} for this textbook. Each branch maps to a bd epic. Pull requests merge to \texttt{main} after quality gates pass (\texttt{pytest}, \texttt{py\_compile} on touched files, dependency verification). The branch name includes the bd issue ID so any PR is traceable back to its tracking issue.
+
+\texttt{requirements.txt} uses pinned versions where breakage is known (e.g., \texttt{gensim==4.4.0}, \texttt{numpy<2}) and loose constraints elsewhere. The ripserplusplus pin is a commit hash, not a version --- because no released version works.
+
+\section{Putting it together}
+
+None of this is glamorous. A cgroup wrapper is not a research contribution. A pinned git commit is not a finding. But the alternative is a project that works on one machine, in one session, and breaks the moment someone (or some future version of ourselves) tries to reproduce it. The tooling chapter exists so that ``it ran on north in April 2026'' can become ``here is how to make it run again.''

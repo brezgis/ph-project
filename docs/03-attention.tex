@@ -1,0 +1,73 @@
+\chapter{mBERT and attention}
+\label{ch:attention}
+
+\section{The intuition: where should a word look?}
+
+Consider a sentence like \emph{The cat sat on the mat}. When we read \emph{sat}, we know implicitly that the sitter is \emph{the cat} and the location is \emph{the mat}. A language model that processes tokens in parallel --- not left-to-right like a recurrent network --- needs a mechanism for each token to \emph{ask the rest of the sequence} which other tokens are relevant to it. That mechanism is attention.
+
+The transformer architecture \parencite{vaswani2017} makes this precise. Each token gets to pose a question (``what am I looking for?''), advertise a description (``what do I contain?''), and offer a payload (``here is my information if you select me''). These three roles correspond to the \textbf{query}, \textbf{key}, and \textbf{value} vectors that the model learns to compute.
+
+\section{Queries, keys, values, and the attention matrix}
+
+Given an input sequence of $n$ tokens, each represented by a $d$-dimensional vector, a single attention head computes three linear projections:
+\begin{align}
+  Q &= X W^Q, \quad K = X W^K, \quad V = X W^V \label{eq:qkv}
+\end{align}
+where $X \in \mathbb{R}^{n \times d}$ is the matrix of input representations, and $W^Q, W^K, W^V \in \mathbb{R}^{d \times d_k}$ are learned weight matrices. Each row of $Q$ is a query; each row of $K$ is a key; each row of $V$ is a value.
+
+The attention weights are computed by scaled dot-product:
+\begin{equation}
+  W = \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) \label{eq:attention}
+\end{equation}
+The matrix $W \in \mathbb{R}^{n \times n}$ is the \textbf{attention matrix}. Entry $W_{ij}$ tells us how much token $i$ attends to token $j$ --- it is a probability distribution over positions, since the softmax normalizes each row to sum to one. The scaling factor $\sqrt{d_k}$ prevents the dot products from growing large enough to push the softmax into saturation, where gradients vanish.
+
+The output of the head is then $W V$: a weighted combination of value vectors, where the weights are the attention scores. Each token's output is a mix of the values of the tokens it attended to most.
+
+Two things are worth internalizing here. First, $W$ is not symmetric --- token $i$ attending to token $j$ does not imply the reverse. The matrix encodes a \emph{directed} relationship. Second, $W$ depends on the content of the tokens, not just their positions. The model decides where to attend based on what it has seen, not where things happen to sit in the string.
+
+\section{Multi-head attention and depth}
+
+A single attention head can only represent one kind of relationship at a time. Multi-head attention runs several heads in parallel --- each with its own learned $W^Q$, $W^K$, $W^V$ --- and concatenates their outputs. BERT uses 12 heads per layer. Each head produces its own $n \times n$ attention matrix, capturing a potentially different pattern of token-to-token relationships.
+
+These multi-head layers stack. BERT has 12 layers, so the full model produces $12 \times 12 = 144$ attention matrices for every input sequence. Early layers tend to capture local, surface-level patterns; deeper layers capture more abstract, long-range dependencies \parencite{clark2019}. The stacking means each layer's input is the output of the layer below --- attention patterns at layer 8 operate on representations that have already been shaped by the seven layers of processing beneath them.
+
+We identify a specific attention matrix by its position in this grid: ``layer $\ell$ head $h$'' (e.g., layer 4 head 7). This notation will recur throughout the rest of this document.
+
+\section{BERT: the encoder-only transformer}
+
+BERT \parencite{devlin2019} takes the transformer encoder --- the half of the original architecture that reads input bidirectionally --- and trains it on two unsupervised objectives. The primary one is masked language modeling (MLM): randomly mask 15\% of input tokens and train the model to predict them from context. This forces every layer to build representations that encode rich contextual information about the surrounding sentence. The second is next-sentence prediction, which was later shown to contribute little and is often omitted in successor models.
+
+What matters for our purposes is that BERT is \emph{bidirectional}: when computing the representation of token $i$, the model can attend to both earlier and later tokens. This is unlike autoregressive language models (GPT-family), which mask future positions. Bidirectionality means every attention matrix is unconstrained --- $W_{ij}$ can be nonzero for any $i, j$ --- and the full $n \times n$ structure is meaningful.
+
+\section{Why mBERT?}
+
+Multilingual BERT (mBERT) is a single BERT model --- 12 layers, 12 heads, 110 million parameters, 768-dimensional hidden representations --- trained on the concatenated Wikipedia text of 104 languages. It uses a shared WordPiece vocabulary of approximately 110,000 subword units. No language labels are provided during training; no explicit alignment objective encourages cross-lingual transfer. The model simply sees multilingual text and must learn to predict masked tokens in all of them.
+
+The surprising finding of \textcite{pires2019} is that this is enough. Despite no explicit cross-lingual supervision, mBERT learns representations that transfer across languages: a model fine-tuned on English NER performs well on Spanish NER without ever seeing Spanish labels. The representations are not language-agnostic --- the model can trivially identify which language a sentence is in --- but they encode structural similarities between languages in shared subspaces.
+
+Why does this matter for us? We want to compare how the model represents the same semantic domain (say, color) across English, Russian, and Spanish. If we used three separate monolingual models, their representation spaces would be incommensurable --- ``closer'' and ``farther'' would have no cross-linguistic meaning. mBERT gives us a single shared representational space. Distances within it --- and, critically, the \emph{topology} of attention patterns within it --- are comparable across languages by construction.
+
+The open question is what ``comparable'' means at the level of attention topology. Two languages may occupy similar regions of the embedding space while their attention patterns --- the token-to-token structure the model uses to \emph{build} those embeddings --- differ in shape. That is precisely the question we are asking.
+
+\section{What attention heads specialize in}
+
+\textcite{clark2019} conducted a systematic study of BERT's 144 attention heads, asking what linguistic information each one captures. Their findings reveal striking specialization:
+
+\begin{itemize}
+  \item Certain heads attend strongly to the \emph{previous} or \emph{next} token, effectively implementing a local context window.
+  \item Some heads specialize in syntactic relations: one head reliably attends from a verb to its direct object; another from a pronoun to its antecedent (coreference).
+  \item Particular heads attend overwhelmingly to delimiter tokens --- \texttt{[SEP]} and \texttt{[CLS]} --- which may function as ``no-op'' attention sinks when no content token is relevant.
+  \item Specialization increases with depth: early-layer heads tend toward positional patterns, while later-layer heads encode more semantic and syntactic relationships.
+\end{itemize}
+
+This specialization is not engineered. It emerges from the MLM training objective alone. The model discovers that allocating different heads to different relationship types is an efficient way to predict masked tokens. For our project, this means that different heads carry different kinds of information about how a language structures relationships between words. If Russian and English organize the color domain differently --- if the синий/голубой boundary creates a structural divide that English lacks --- we should expect that difference to manifest in specific heads, not as uniform noise across all 144.
+
+This is the basis of our prediction that cross-linguistic topological differences will be head-specific rather than diffuse.
+
+\section{The object we carry forward}
+
+We now have the object that the rest of the pipeline will operate on. For a given input sentence of $n$ tokens, processed by mBERT, we extract the attention matrix $W \in \mathbb{R}^{n \times n}$ at a specific layer $\ell$ and head $h$. Each row $i$ of this matrix is a probability distribution: $W_{ij} \geq 0$ and $\sum_j W_{ij} = 1$. Entry $W_{ij}$ encodes how much token $i$ attends to token $j$ --- a learned, content-dependent measure of relevance.
+
+This matrix is the input to \autoref{ch:graphs}, where we convert it into a graph by thresholding --- keeping an edge between tokens $i$ and $j$ only when $W_{ij}$ exceeds some threshold $\varepsilon$. As $\varepsilon$ varies, the graph's topology changes, and that changing topology is what persistent homology measures.
+
+The key insight of \textcite{kushnareva2021} is that this topological signature --- the pattern of how connected components and loops appear and disappear as $\varepsilon$ sweeps from 0 to 1 --- is a robust, interpretable fingerprint of the attention structure. Our contribution is to ask whether that fingerprint differs systematically across languages within a shared semantic domain.

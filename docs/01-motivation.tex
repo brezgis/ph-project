@@ -1,0 +1,72 @@
+\chapter{Motivation and hypothesis}
+\label{ch:motivation}
+
+\section{The puzzle}
+
+Here is a fact that should bother you: Russian speakers cannot call the sky and the ocean the same color without sounding strange. English speakers do it effortlessly --- both are ``blue.'' But in Russian, the sky is \cyr{голубой} (goluboj, `light blue') and the deep ocean is \cyr{синий} (sinij, `dark blue'), and these are not shades of a single category. They are separate basic color terms, as psychologically distinct as ``red'' and ``orange'' are in English \parencite{paramei2005}. \textcite{winawer2007} demonstrated that this is not just a naming preference: Russian speakers discriminate colors faster when they straddle the \cyr{синий}/\cyr{голубой} boundary, and this advantage vanishes under verbal interference. The boundary is linguistically mediated. Language does not merely label perception --- it reshapes it.
+
+This observation sits at the heart of a much older question. Does the structure of a language encode something about how its speakers organize the world? The strong form of this claim --- that language determines thought --- is long discredited. But the weaker, empirically productive version persists: that habitual linguistic distinctions create attentional biases, making certain categorical boundaries more salient than others \parencite{lupyan2020}. The evidence is now robust across color \parencite{davidoff1999, winawer2007}, emotion \parencite{wierzbicka1999, pavlenko2005}, and kinship \parencite{friedrich1964}.
+
+We ask: if these linguistically-mediated attentional structures are real, do they leave traces in the internal representations of a multilingual language model? And if they do, what is the right mathematical language for describing those traces?
+
+\section{Why shape, not distance}
+
+The default tool for comparing representations across languages is distance: cosine similarity, Euclidean distance, alignment scores. These capture \emph{how far apart} representations are. But our hypothesis is not about distance. It is about structure --- specifically, about whether the \emph{topology} of attention patterns differs across languages in ways that reflect categorical boundaries.
+
+Consider the Russian blue split concretely. If we extract mBERT's attention patterns for color terms in Russian and English, we might find that the Russian blue region contains two clusters (one for \cyr{синий}-contexts, one for \cyr{голубой}-contexts) where English has only one. A distance metric could tell us that certain Russian blue terms are far from each other. But it cannot tell us that the Russian color space has an \emph{extra connected component} --- an additional discrete structural unit --- that the English space lacks. That is a topological claim, not a metric one.
+
+Persistent homology gives us precisely this vocabulary. It detects connected components ($H_0$ features), loops ($H_1$ features), and higher-dimensional cavities in data, and it tracks how these features appear and disappear as we vary a threshold parameter $\varepsilon$. A connected component that persists across a wide range of $\varepsilon$ values is a robust structural feature of the data; one that flickers in and out is noise. This distinction between ``real structure'' and ``artifact of threshold choice'' is exactly what we need: we are looking for topological features that are \emph{robustly present} in one language's attention patterns and \emph{robustly absent} in another's.
+
+\section{Why mBERT}
+
+Why mBERT rather than a monolingual model for each language? Because we need representations that share a vector space. If Russian and English live in separate embedding spaces, ``closer'' and ``farther'' across languages has no meaning. mBERT gives us a single 768-dimensional space trained on 104 languages simultaneously --- cross-linguistic distances within it are comparable by construction \parencite{pires2019}.
+
+There is a deeper reason. mBERT was never explicitly taught that \cyr{синий} and \cyr{голубой} are different basic categories, or that English ``blue'' covers the range of both. It learned whatever distributional patterns exist in its training corpora. If the \cyr{синий}/\cyr{голубой} distinction shows up in mBERT's internal attention structure, that is evidence that the categorical boundary is \emph{distributionally real} --- encoded in patterns of co-occurrence, collocation, and contextual usage, not just in explicit dictionary definitions. The model becomes a probe: it tells us what structure is extractable from language-as-used, without metalinguistic instruction.
+
+We focus on attention matrices specifically because \textcite{clark2019} showed that individual attention heads in BERT specialize for different linguistic functions --- some track syntactic dependencies, others coreference, others positional patterns. \textcite{kushnareva2021} demonstrated that the \emph{topology} of these attention patterns (not just their magnitudes) carries meaningful signal, distinguishing human-written from machine-generated text with high accuracy. We adapt their insight: if attention topology can distinguish text sources, it should also distinguish the attentional structures that different languages impose on shared semantic domains.
+
+\section{Three domains, three languages}
+
+We study three semantic domains --- color, emotion, kinship --- chosen because each offers a different balance of universality and cultural specificity.
+
+\textbf{Color} is the most constrained. \textcite{berlin1969} established that basic color term systems evolve along a predictable trajectory, and most disagreement across languages concerns boundary placement within a shared perceptual substrate. The Russian blue split is the sharpest available test case: a single, well-documented structural difference against a background of high cross-linguistic agreement.
+
+\textbf{Emotion} is the least constrained. While \textcite{ekman1992} argued for a small set of universal basic emotions, \textcite{wierzbicka1999} demonstrated that emotion vocabularies vary dramatically across languages, with many terms lacking translation equivalents entirely. Russian \cyr{тоска} (toska, `a deep spiritual longing'), the cluster of meanings around Spanish \emph{duende} --- these are not failures of translation but reflections of genuinely different conceptual structures \parencite{pavlenko2005}. We expect the emotion domain to show the largest cross-linguistic topological divergence.
+
+\textbf{Kinship} sits between the two. Kinship systems are constrained by biological reality (every human has parents, siblings, offspring) but vary in which distinctions are lexicalized. Russian distinguishes maternal and paternal uncles (\cyr{дядя} serves for both, but compounds \cyr{по матери}/\cyr{по отцу} are common); it also lexicalizes in-law relationships that English leaves to compounds \parencite{friedrich1964, murdock1949}. We expect intermediate topological complexity: more structured than the universal-tending color domain, less divergent than emotion.
+
+Three languages --- English, Russian, Spanish --- give us a minimal but productive comparison set. English and Spanish share an 11-term basic color system \parencite{berlin1969, lillo2018}; Russian adds the 12th term. This means any topological difference between Russian and the other two in the blue region cannot be attributed to general cross-linguistic noise --- it must reflect the sinij/goluboj split specifically.
+
+\section{Pre-registered predictions}
+
+We commit to four predictions before examining the data:
+
+\begin{enumerate}
+  \item \textbf{Russian blue split.} The Russian color domain shows additional $H_0$ structure (an extra connected component) for blue terms compared to English and Spanish, reflecting the obligatory \cyr{голубой}/\cyr{синий} distinction.
+
+  \item \textbf{Emotion divergence exceeds color divergence.} Cross-linguistic topological distances are larger in the emotion domain than in the color domain, because color categories are more universally constrained \parencite{berlin1969} while emotion categories are more culturally variable \parencite{wierzbicka1999}.
+
+  \item \textbf{Russian kinship complexity.} The Russian kinship domain shows greater topological complexity (more $H_0$ and $H_1$ features with high persistence) than English, reflecting more lexicalized categorical distinctions \parencite{friedrich1964}.
+
+  \item \textbf{Head specialization.} Certain mBERT attention heads consistently carry domain-specific topological signatures across languages --- the same head that distinguishes color categories in English also does so in Russian and Spanish \parencite{clark2019}.
+\end{enumerate}
+
+Pre-registration matters because topological data analysis is flexible enough to find \emph{something} interesting in almost any dataset. Without predictions stated in advance, we cannot distinguish genuine structural discovery from post-hoc pattern-matching. These predictions are falsifiable, specific, and grounded in the linguistics literature.
+
+\section{Falsification}
+
+What would convince us we are wrong?
+
+If the Russian color domain shows no additional $H_0$ structure in the blue region --- if its topological signature is indistinguishable from English and Spanish --- then either the \cyr{синий}/\cyr{голубой} boundary is not encoded in mBERT's attention patterns, or our pipeline is not sensitive enough to detect it. The first possibility is interesting (it would mean distributional statistics alone do not capture this perceptual-linguistic boundary); the second is a methodological limitation we can partially diagnose by checking whether the pipeline detects \emph{any} known structural differences.
+
+If emotion divergence does not exceed color divergence, the universalist position gains ground: perhaps distributional patterns enforce more cross-linguistic regularity in emotion semantics than the lexical evidence suggests.
+
+If topological features are uniformly distributed across attention heads with no specialization, then the structural claims of \textcite{clark2019} may not extend to semantic-domain organization, and our approach of analyzing individual heads would need to give way to aggregate analysis.
+
+The strongest falsification would be finding no systematic relationship between any of our pre-registered predictions and the observed topology. That would suggest either that mBERT's shared vector space does not preserve language-specific categorical structure, or that persistent homology on attention graphs is not the right lens for detecting it. Both would be informative results --- they would tell us where the boundary lies between what distributional models encode and what requires other forms of evidence.
+
+\section{Relationship to prior work}
+
+\textcite{kushnareva2021} showed that attention topology distinguishes human from machine text. \textcite{draganov2024} applied topological data analysis to static word embeddings across 81 Indo-European languages, finding that embedding spaces differ in shape (not just content) across language families. We sit at the intersection: we apply Kushnareva's attention-topology pipeline to a cross-linguistic comparison question that Draganov and Skiena motivate but approach with different tools (static embeddings rather than contextual attention).
+
+The novelty is the combination. No prior work, to our knowledge, has used persistent homology on mBERT attention patterns to test specific cross-linguistic hypotheses about semantic organization. The pieces exist --- the topology pipeline, the multilingual model, the linguistic predictions --- but they have not been assembled in this configuration before. Whether the assembly produces insight or noise is what the rest of this document investigates.

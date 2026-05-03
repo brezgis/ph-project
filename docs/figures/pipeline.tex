@@ -1,0 +1,57 @@
+% pipeline.tex — project pipeline block diagram
+% Include via \input{figures/pipeline} from overview.tex
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    >=Stealth,
+    block/.style={
+        rectangle, draw=black!70, fill=white,
+        minimum height=2.2em, minimum width=5.5em,
+        text centered, font=\small,
+        rounded corners=2pt, thick
+    },
+    arrow/.style={->, thick, black!70},
+    brace label/.style={font=\small\itshape, text=black!70},
+    node distance=0.8cm and 0.4cm
+]
+
+% --- Pipeline blocks (left to right) ---
+\node[block] (corpus) {Corpus};
+\node[block, right=of corpus] (kwic) {KWIC extraction};
+\node[block, right=of kwic] (mbert) {mBERT attention};
+\node[block, right=of mbert] (filt) {Graph filtration};
+\node[block, right=of filt] (ph) {\shortstack{Persistent homology\\features}};
+\node[block, right=of ph] (comp) {\shortstack{Cross-linguistic\\comparison}};
+
+% --- Arrows ---
+\draw[arrow] (corpus) -- (kwic);
+\draw[arrow] (kwic) -- (mbert);
+\draw[arrow] (mbert) -- (filt);
+\draw[arrow] (filt) -- (ph);
+\draw[arrow] (ph) -- (comp);
+
+% --- Top brace: linguistic input (corpus + kwic + mbert) ---
+\draw[decorate, decoration={brace, amplitude=6pt, raise=8pt}, thick, black!60]
+    (corpus.north west) -- (mbert.north east)
+    node[midway, above=16pt, brace label] {linguistic input};
+
+% --- Top brace: topology (filt + ph + comp) ---
+\draw[decorate, decoration={brace, amplitude=6pt, raise=8pt}, thick, black!60]
+    (filt.north west) -- (comp.north east)
+    node[midway, above=16pt, brace label] {topology};
+
+\end{tikzpicture}%
+}
+\caption{%
+    The ph-project pipeline. We extract keyword-in-context (KWIC) windows
+    from multilingual corpora, run them through mBERT to obtain per-head
+    attention matrices, threshold those matrices into a family of graphs
+    (the filtration), compute persistent homology features from the
+    filtration, and compare the resulting topological signatures across
+    languages. The left half is standard NLP; the right half is where
+    topological data analysis enters.%
+}
+\label{fig:pipeline}
+\end{figure}

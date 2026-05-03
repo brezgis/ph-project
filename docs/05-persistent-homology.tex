@@ -1,0 +1,409 @@
+\chapter{Persistent homology in plain language}
+\label{ch:persistent-homology}
+
+This chapter is the mathematical core of the document.
+We build from spatial intuitions that any linguist already has---the sense
+that some things cluster, some things form loops, some structures have
+holes---and turn those intuitions into machinery precise enough to run
+on attention graphs.
+The tools come from algebraic topology, but the ideas are
+concrete: count the pieces, count the holes, and track how both change
+as we zoom in.
+
+\bigskip
+
+\begin{table}[ht]
+\centering
+\caption{Core notation used throughout this chapter and the rest of the document.}
+\label{tab:notation}
+\begin{tabular}{c p{10cm}}
+\hline
+\textbf{Symbol} & \textbf{Meaning} \\
+\hline
+$\varepsilon$ & Filtration parameter (threshold). As $\varepsilon$ grows, more simplices enter the complex. \\
+$W$ & Attention weight matrix from a single head. $W_{ij}$ is the attention weight from token $i$ to token $j$. \\
+$d(u,v)$ & Distance between two points (or tokens). In our pipeline, typically derived from attention weights. \\
+$H_0$ & Zeroth homology group: its rank counts connected components. \\
+$H_1$ & First homology group: its rank counts independent loops (1-cycles). \\
+$H_2$ & Second homology group: its rank counts enclosed voids. Rarely informative for attention graphs. \\
+$\beta_0, \beta_1$ & Betti numbers: $\beta_k = \mathrm{rank}(H_k)$. $\beta_0$ is the number of components; $\beta_1$ is the number of loops. \\
+$(b_i, d_i)$ & A persistence pair: feature $i$ is born at filtration value $b_i$ and dies at $d_i$. \\
+$d_B$ & Bottleneck distance between two persistence diagrams. \\
+$W_p$ & $p$-Wasserstein distance between two persistence diagrams. \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{The shape of data}
+\label{sec:shape-of-data}
+
+Suppose we have a set of points in some space and we want to describe
+their \emph{shape}---not the coordinates of individual points, but the
+large-scale geometric structure they form. Do they fall into separate
+clusters? Do they trace out a ring? Is there a void in the middle?
+
+These are topological questions.
+Topology studies the properties of a space that survive continuous
+deformation: stretching and bending are allowed, tearing and gluing are
+not.
+A coffee mug and a donut are topologically identical (both have exactly
+one hole); a coffee mug and a bowling ball are not.
+\textcite{carlsson2009} argued that the same invariants that
+distinguish the mug from the ball can distinguish genuinely different
+shapes in high-dimensional data, and that this perspective---topology
+applied to finite, noisy point clouds---constitutes a new kind of data
+analysis.
+
+The field that grew from that argument is \emph{topological data
+analysis} (TDA), and its central tool is \emph{persistent homology}
+\parencite{edelsbrunner2010, zomorodian2005}.
+We use persistent homology in this project because we care about
+\emph{structural} differences between attention graphs, not just
+differences in individual edge weights.
+Two attention heads could have very different weight distributions yet
+produce the same graph shape (same clusters, same loops); two other
+heads could have similar weight distributions yet produce topologically
+distinct graphs.
+Persistent homology sees the distinction that raw statistics miss.
+
+
+\section{Simplicial complexes: the building blocks}
+\label{sec:simplicial-complexes}
+
+To do topology on a finite point set, we need to build a space from it.
+The standard construction uses \emph{simplicial complexes}---objects
+assembled from a small kit of geometric pieces:
+
+\begin{itemize}
+  \item A \textbf{0-simplex} is a point (a vertex).
+  \item A \textbf{1-simplex} is an edge connecting two vertices.
+  \item A \textbf{2-simplex} is a filled triangle on three vertices.
+  \item In general, a \textbf{$k$-simplex} is the convex hull of $k+1$
+        points---but for attention graphs we rarely go above $k = 2$.
+\end{itemize}
+
+A \emph{simplicial complex} $K$ is a collection of simplices that is
+closed under taking faces: if a triangle belongs to $K$, then so do its
+three edges and three vertices.
+The complex is the ``space'' we do topology on.
+
+How do we get a simplicial complex from data?
+Given a set of points with pairwise distances, we pick a threshold
+$\varepsilon$ and connect every pair of points whose distance is at most
+$\varepsilon$.
+This gives us a graph (vertices and edges).
+Whenever three points are mutually connected, we fill in the triangle.
+Whenever four points are mutually connected, we fill in the tetrahedron.
+And so on.
+The result is the \emph{Vietoris--Rips complex} at scale $\varepsilon$,
+written $\mathrm{VR}_\varepsilon$.
+
+For attention graphs, the ``points'' are tokens and the ``distances''
+come from the attention weight matrix $W$ (specifically, from a
+transformation of the weights---\autoref{ch:pipeline} details the
+conversion).
+At a low threshold only the strongest connections appear;
+at a high threshold nearly everything is connected.
+The interesting structure lives in between.
+
+
+\section{Filtrations: watching structure emerge}
+\label{sec:filtration}
+
+A single snapshot of the Vietoris--Rips complex at one threshold
+$\varepsilon$ captures some of the data's shape, but choosing the
+``right'' $\varepsilon$ is both arbitrary and lossy.
+Persistent homology sidesteps the problem by refusing to choose.
+Instead, we sweep $\varepsilon$ from $0$ to $\infty$ and watch the
+complex grow.
+
+A \emph{filtration} is this nested sequence of complexes:
+\[
+  \emptyset
+  = K_0 \subseteq K_1 \subseteq K_2 \subseteq \cdots \subseteq K_m = K,
+\]
+where each $K_i$ is the Vietoris--Rips complex at some threshold
+$\varepsilon_i$, and $\varepsilon_0 < \varepsilon_1 < \cdots <
+\varepsilon_m$.
+As $\varepsilon$ increases, simplices appear and never disappear---once
+an edge is added, it stays.
+
+\input{figures/filtration}
+
+\autoref{fig:filtration} illustrates this on a small example.
+At the smallest thresholds we see only isolated vertices (many connected
+components, no loops).
+As $\varepsilon$ grows, edges appear and components merge.
+At some point a loop may form: three or more edges close into a cycle
+without a filled triangle inside.
+If $\varepsilon$ grows further and the triangle fills in, the loop
+vanishes.
+The filtration records the entire history of these births and deaths.
+
+
+\section{Homology: counting the holes}
+\label{sec:homology}
+
+Homology is the algebraic machinery that counts topological
+features---components, loops, voids---of a simplicial complex.
+We will not develop the full algebraic theory (which requires chain
+complexes, boundary operators, and quotient groups; see
+\textcite{edelsbrunner2010} for the complete treatment).
+What matters for us is the output: for each dimension $k$, the
+\emph{$k$-th homology group} $H_k$ of a simplicial complex $K$, and its
+rank $\beta_k = \mathrm{rank}(H_k)$, the \emph{$k$-th Betti number}.
+
+\paragraph{$H_0$: connected components.}
+$\beta_0$ counts the number of connected components in the complex.
+A complex with five isolated vertices has $\beta_0 = 5$.
+Adding an edge between two vertices merges two components into one, so
+$\beta_0$ drops by one.
+In terms of attention graphs: $\beta_0$ tells us how many disconnected
+clusters of tokens exist at a given threshold.
+A head that attends broadly (connecting most tokens) will have
+$\beta_0 = 1$ at moderate $\varepsilon$;
+a head that attends narrowly will keep $\beta_0$ high for longer.
+
+\paragraph{$H_1$: loops.}
+$\beta_1$ counts independent loops---closed paths of edges that do not
+bound a filled triangle.
+Think of a square made of four edges with no diagonal: it has one loop
+($\beta_1 = 1$).
+Add a diagonal to split it into two triangles and fill both: the loop
+dies ($\beta_1 = 0$).
+In attention graphs, a loop signals a cycle of mutual attention among a
+group of tokens where no single token mediates all the connections.
+\textcite{kushnareva2021} found that $H_1$ features were among the most
+discriminative for distinguishing human-written from machine-generated
+text---machine text produced systematically different loop structures.
+
+\paragraph{$H_2$ and higher.}
+$\beta_2$ counts enclosed voids (think of the hollow interior of a
+tetrahedron whose four triangular faces are present but whose
+interior is not filled).
+For the token counts typical of our attention graphs (sentences of
+20--128 tokens), $H_2$ features are sparse and noisy.
+We compute them when Ripser provides them, but they carry little signal
+in practice.
+Throughout this project, our workhorse features come from $H_0$ and
+$H_1$.
+
+
+\section{Persistence: birth, death, and the diagram}
+\label{sec:persistence}
+
+Now we combine the filtration with homology.
+As $\varepsilon$ sweeps from $0$ upward, topological features appear and
+disappear.
+A connected component is \emph{born} at the smallest $\varepsilon$ where
+its vertex first enters the complex, and it \emph{dies} when it merges
+with an older component (by convention, the younger component dies---the
+\emph{elder rule}).
+A loop is born when its closing edge appears, and it dies when a
+triangle fills it in.
+
+Each feature yields a \emph{persistence pair} $(b_i, d_i)$, where $b_i$
+is the birth value and $d_i$ is the death value.
+The quantity $d_i - b_i$ is the feature's \emph{persistence}---how long
+it survives across the filtration.
+High-persistence features reflect robust structure in the data;
+low-persistence features are typically noise or artifacts of the
+particular sample \parencite{ghrist2008}.
+
+Two equivalent visualizations represent the collection of persistence
+pairs:
+
+\begin{enumerate}
+  \item \textbf{Persistence diagram.}
+        Plot each pair $(b_i, d_i)$ as a point in the plane, with
+        birth on the horizontal axis and death on the vertical axis.
+        Every point lies above the diagonal $b = d$ (a feature always
+        dies after it is born).
+        Points far from the diagonal are high-persistence; points
+        near it are noise.
+  \item \textbf{Barcode.}
+        Draw each pair as a horizontal bar from $b_i$ to $d_i$.
+        Long bars correspond to persistent features; short bars to
+        ephemeral ones.
+        The barcode is the multiset view of the same information.
+\end{enumerate}
+
+\input{figures/persistence-diagram}
+
+\autoref{fig:persistence-diagram} shows both representations for a small
+filtration.
+In our pipeline, we compute a persistence diagram for each attention
+head, separately for $H_0$ and $H_1$.
+The collection of diagrams across all 144 attention heads of mBERT
+(12 layers $\times$ 12 heads) forms the topological fingerprint of a
+given input.
+
+
+\section{The stability theorem}
+\label{sec:stability}
+
+Persistent homology would be a curiosity rather than a tool if its
+output were fragile---if a tiny change in the input data could
+rearrange the persistence diagram entirely.
+The \emph{stability theorem} of \textcite{cohensteiner2007} guarantees
+that this does not happen.
+
+The theorem says: if two functions (in our case, two distance matrices
+derived from attention weights) differ by at most $\delta$ in the
+supremum norm, then their persistence diagrams differ by at most
+$\delta$ in the \emph{bottleneck distance} $d_B$.
+Formally, for tame functions $f$ and $g$,
+\[
+  d_B\bigl(\mathrm{Dgm}(f),\, \mathrm{Dgm}(g)\bigr) \;\leq\; \|f - g\|_\infty.
+\]
+
+The bottleneck distance $d_B$ between two diagrams is defined as the
+infimum, over all bijections $\gamma$ between the two multisets of
+points (with points on the diagonal available as padding), of the
+largest distance between matched pairs:
+\[
+  d_B(D, D') = \inf_\gamma \sup_i \| p_i - \gamma(p_i) \|_\infty.
+\]
+
+Why does stability matter for us?
+Attention weights vary slightly across runs of the same input
+(dropout during inference, floating-point nondeterminism on GPU).
+Stability guarantees that these small perturbations produce
+small perturbations of the diagram.
+The topological features we extract are not artifacts of numerical
+noise---they reflect genuine structure in the attention pattern.
+This is the property that makes persistent homology a reliable feature
+extractor rather than an over-sensitive novelty.
+
+
+\section{Comparing persistence diagrams}
+\label{sec:comparing-diagrams}
+
+The bottleneck distance $d_B$ described above is one way to compare two
+persistence diagrams; it measures the worst-case mismatch.
+A complementary metric is the \emph{$p$-Wasserstein distance}:
+\[
+  W_p(D, D') = \left(\inf_\gamma \sum_i \| p_i - \gamma(p_i)
+  \|_\infty^p \right)^{1/p},
+\]
+which sums over all matched pairs rather than taking the supremum.
+For $p = 2$, $W_2$ is particularly common.
+The bottleneck distance is sensitive to the single most different
+feature; the Wasserstein distance is sensitive to the aggregate of all
+differences.
+Both have stability guarantees \parencite{cohensteiner2007}.
+
+These distances operate directly on diagrams, which is elegant but
+inconvenient for machine learning: most classifiers expect
+fixed-dimensional vector inputs, and persistence diagrams have variable
+numbers of points.
+Two vectorization strategies bridge the gap:
+
+\paragraph{Persistence landscapes.}
+\textcite{bubenik2015} proposed mapping each diagram to a sequence of
+piecewise-linear functions (``landscapes'') that live in a Banach space.
+Landscapes support averaging, statistical tests, and direct use as
+feature vectors.
+
+\paragraph{Persistence images.}
+\textcite{adams2017} instead place a Gaussian kernel at each point of
+the diagram, weight by a function of persistence, and discretize the
+result onto a grid.
+The output is a fixed-size matrix---an image---that can be fed to any
+classifier.
+
+\textcite{kushnareva2021} took a different and more direct approach:
+rather than vectorizing diagrams via landscapes or images, they
+extracted hand-crafted summary statistics from the barcodes---mean bar
+length, variance, entropy, counts above thresholds---and concatenated
+these across attention heads.
+This trades representational richness for interpretability and
+computational simplicity, and it worked well enough to achieve
+state-of-the-art results on artificial text detection.
+Our adaptation inherits this choice (\autoref{ch:pipeline} walks through
+the specific features).
+
+
+\section{What features get extracted}
+\label{sec:features-conceptual}
+
+Before we defer the full feature specification to \autoref{ch:pipeline},
+a conceptual preview will help orient the reader.
+\textcite{kushnareva2021} extract three families of topological features
+from each attention head:
+
+\paragraph{Barcode statistics.}
+From the $H_0$ and $H_1$ barcodes, they compute: the number of bars,
+the sum, mean, and variance of bar lengths, the birth and death times of
+the longest bar, the number of bars born before or after a given
+threshold, and the entropy of the barcode (treating normalized bar
+lengths as a probability distribution).
+These are scalar summaries of the persistence diagram.
+
+\paragraph{Threshold features.}
+At each of several fixed thresholds $\varepsilon_1 < \cdots <
+\varepsilon_k$, they record the number of edges, the number of connected
+components ($\beta_0$), and the number of strongly connected components
+and simple cycles in the directed version of the graph.
+These capture the graph's structure at specific scales rather than
+summarizing across the whole filtration.
+
+\paragraph{Pattern-distance features.}
+\textcite{clark2019} identified recurring structural motifs in BERT
+attention: attention to the previous token, to the next token, to
+\texttt{[CLS]}, to \texttt{[SEP]}, and to punctuation.
+Kushnareva formalize each pattern as a template graph and measure the
+(normalized Frobenius) distance from the actual attention graph to each
+template at every threshold.
+These features quantify how closely a head's attention conforms to known
+patterns.
+
+All three families are concatenated across the 144 attention heads of
+BERT to form a single high-dimensional feature vector per input text.
+For our cross-linguistic comparison, the question becomes: do these
+topological fingerprints cluster by language, by semantic domain, or by
+both?
+
+
+\section{Computation: Ripser and giotto-tda}
+\label{sec:computation}
+
+Computing persistent homology reduces to a matrix reduction problem
+over $\mathbb{Z}/2\mathbb{Z}$---the boundary matrices of the simplicial
+complex are reduced to a normal form that directly yields the
+persistence pairs \parencite{zomorodian2005}.
+The naive approach is cubic in the number of simplices, which is already
+exponential in the number of vertices.
+For the Vietoris--Rips complex on $n$ points, the complex can have up to
+$2^n$ simplices, so efficient algorithms are essential.
+
+\textcite{bauer2021} developed \emph{Ripser}, an algorithm and
+implementation that exploits three key optimizations:
+the \emph{clearing} optimization (many columns reduce to zero and can be
+skipped), \emph{cohomology} (working with coboundary matrices, which are
+sparser than boundary matrices in the Rips filtration), and an
+\emph{implicit} representation of the Vietoris--Rips complex that avoids
+enumerating all simplices.
+Ripser is the standard tool for Vietoris--Rips persistent homology
+and is typically an order of magnitude faster than alternatives.
+
+In our pipeline, we access Ripser through two Python interfaces.
+The \texttt{ripser} Python package (version 0.6.14 in our environment)
+wraps the C++ core for CPU computation.
+\texttt{giotto-tda} \parencite{tauzin2021} provides a scikit-learn-compatible
+API with transformers for persistence diagrams, Betti curves, and
+landscapes.
+For GPU-accelerated computation, we use \texttt{ripserplusplus}---a CUDA
+port that is substantially faster on large inputs but requires careful
+version pinning.
+(The PyPI release does not compile against CUDA~12+; we pin to a
+specific commit.
+\autoref{ch:tooling} documents the details.)
+
+The computational cost is manageable for our setting.
+Each attention head produces a matrix of at most $128 \times 128$
+(the maximum sequence length after tokenization), and Ripser handles
+matrices of this size in milliseconds.
+The full pipeline across all 144 heads, three languages, and three
+semantic domains remains well within the capacity of a single GPU
+workstation.
