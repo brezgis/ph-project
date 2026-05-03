@@ -39,3 +39,12 @@ ipykernel
 
 # Utilities
 tqdm
+pyyaml
+
+# Phase 1 KWIC — lemma matching
+pymorphy3
+spacy>=3.7
+# spaCy models are NOT installed via pip; download them separately:
+#   python -m spacy download en_core_web_md
+#   python -m spacy download es_core_news_md
+# Do NOT pin model versions here — spaCy manages model installs via its own CLI.
