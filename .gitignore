@@ -25,6 +25,7 @@ data/kwic/**/*.csv
 data/kwic/**/*.json
 data/attention/
 data/fasttext/
+data/leipzig/
 *.npz
 *.npy
 *.pt
