@@ -39,6 +39,7 @@ ipykernel
 
 # Utilities
 tqdm
+pyyaml
 
 # Phase 1 KWIC — lemma matching
 pymorphy3

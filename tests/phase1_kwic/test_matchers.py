@@ -43,21 +43,8 @@ def ru_matcher():
 
 
 # ---------------------------------------------------------------------------
-# Matcher Protocol — interface contract
-# ---------------------------------------------------------------------------
-
-def test_matcher_has_lemmatize(en_matcher):
-    """SpacyMatcher must expose a `lemmatize` method."""
-    assert hasattr(en_matcher, "lemmatize") and callable(en_matcher.lemmatize)
-
-
-def test_ru_matcher_has_lemmatize(ru_matcher):
-    """PymorphyMatcher must expose a `lemmatize` method."""
-    assert hasattr(ru_matcher, "lemmatize") and callable(ru_matcher.lemmatize)
-
-
-# ---------------------------------------------------------------------------
-# lemmatize return type
+# lemmatize return type — also covers the Matcher Protocol interface contract,
+# since a missing .lemmatize method would AttributeError before the assertions.
 # ---------------------------------------------------------------------------
 
 def test_en_lemmatize_returns_list_of_tuples(en_matcher):
@@ -181,6 +168,33 @@ def test_get_matcher_unknown_lang_raises():
     """get_matcher with an unsupported language raises ValueError."""
     with pytest.raises(ValueError, match="lang"):
         get_matcher("de")
+
+
+def test_spacy_matcher_unknown_lang_raises():
+    """SpacyMatcher constructed directly with an unsupported language raises ValueError.
+
+    Covers the direct-instantiation path that get_matcher does not exercise.
+    """
+    with pytest.raises(ValueError, match="lang"):
+        SpacyMatcher("fr")
+
+
+# ---------------------------------------------------------------------------
+# Edge inputs — empty string, punctuation only
+# ---------------------------------------------------------------------------
+
+def test_pymorphy_lemmatize_empty(ru_matcher):
+    """Empty input yields an empty list, not an error.
+
+    5f9.4 will scan every corpus sentence, including any that may be blank
+    after upstream filtering. The matcher must not crash on those.
+    """
+    assert ru_matcher.lemmatize("") == []
+
+
+def test_spacy_lemmatize_empty(en_matcher):
+    """Empty input yields an empty list, not an error."""
+    assert en_matcher.lemmatize("") == []
 
 
 # ---------------------------------------------------------------------------

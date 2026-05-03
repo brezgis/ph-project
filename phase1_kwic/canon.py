@@ -184,11 +184,18 @@ def load_canon(
         for ws_token in ws_tokens:
             pairs = matcher.lemmatize(ws_token)
             if pairs:
-                # Take the first lemma from the sub-tokenized result.
-                # For PymorphyMatcher: always one pair.
-                # For SpacyMatcher on "father-in-law": [("father","father"),
-                #   ("-","-"), ("in","in"), ("-","-"), ("law","law")] → take "father".
-                lemma_parts.append(pairs[0][1])
+                # Prefer the first non-punctuation lemma. For SpacyMatcher on
+                # "father-in-law" the sub-token list is
+                #   [("father","father"), ("-","-"), ("in","in"), ("-","-"), ("law","law")]
+                # so taking the first non-punctuation entry yields "father". A
+                # canon term whose first whitespace token starts with punctuation
+                # (e.g. "'paternal' uncle" if such a thing were ever added) would
+                # otherwise silently lemmatize to the punctuation character.
+                lemma = next(
+                    (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
+                    pairs[0][1],
+                )
+                lemma_parts.append(lemma)
             else:
                 # Empty result (empty string token — shouldn't happen): passthrough
                 lemma_parts.append(ws_token.lower())
