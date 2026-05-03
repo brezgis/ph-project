@@ -40,16 +40,23 @@ Columns are fixed:
 | column          | type   | description                                                                  |
 |-----------------|--------|------------------------------------------------------------------------------|
 | `term`          | string | Canon term (surface form from `canon-terms/<lang>/<domain>.yaml`).           |
+| `labels`        | string | Substrate-compat alias of `term` (identical content; see below).             |
 | `sentence`      | string | The KWIC string, ±10 whitespace tokens around the target. See "Window".      |
 | `target_idx`    | int    | Zero-based index of the target token within `sentence` (post-tokenization). |
 | `corpus_source` | string | Pinned Leipzig corpus ID, e.g., `eng_news_2020_1M`.                          |
 
 ### Why these columns and only these
 
-* `term` is the per-row anchor. Phase 3's threshold notebook treats it
-  as the categorical label (`labels` column in Kushnareva's CSVs); the
-  one-line adapter is `df.rename(columns={"term": "labels"})` or a
-  direct categorical encoding.
+* `term` is the per-row human-readable anchor and the canonical name
+  for the canon-term surface form.
+* `labels` is **identical in content** to `term` and exists purely
+  for substrate compatibility. Kushnareva's threshold notebook reads
+  `data['labels']` (it was a binary class label in the original task);
+  Phase 3 (`ph-project-mwk.2`) is notebook-faithful per CLAUDE.md and
+  preserves that reference. Emitting `labels` here means `mwk.2`'s
+  edit list (model swap, max-tokens cap, do_lower_case=False) does
+  NOT need to grow a column-rename step. The disk cost is one
+  redundant string column per row, which is negligible.
 * `sentence` is the input fed to mBERT. It MUST be non-empty and MUST
   NOT roundtrip to NaN through pandas — `sentence` will be passed
   through `re.sub` in the substrate notebook (see
@@ -202,7 +209,9 @@ same inputs MUST produce a byte-identical CSV.
 The schema-tests subtask (`ph-project-5f9.X` — to be filed) enforces:
 
 * All nine CSVs exist after a full extraction run.
-* Each CSV has exactly the four columns named above, in that order.
+* Each CSV has exactly the five columns named above, in that order:
+  `term`, `labels`, `sentence`, `target_idx`, `corpus_source`.
+* `labels` equals `term` row-for-row (the substrate-compat alias).
 * No row has a NaN or empty-string `sentence`.
 * Each `term` value appears in the corresponding canon-term YAML.
 * `target_idx` is a non-negative integer less than the number of
