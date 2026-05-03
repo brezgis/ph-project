@@ -38,11 +38,12 @@ import pathlib
 
 from gensim.models import KeyedVectors
 
+from baselines import SUPPORTED_LANGUAGES
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_VALID_LANGS = frozenset({"en", "ru", "es"})
 _VALID_KINDS = frozenset({"cc", "aligned"})
 
 # Default data root: resolve relative to the repo root (two levels up from
@@ -92,9 +93,9 @@ def load_fasttext(lang: str, kind: str) -> KeyedVectors:
         If the expected file is not present.  Run
         ``scripts/download_fasttext.sh`` to download the vectors.
     """
-    if lang not in _VALID_LANGS:
+    if lang not in SUPPORTED_LANGUAGES:
         raise ValueError(
-            f"lang must be one of {sorted(_VALID_LANGS)!r}, got {lang!r}."
+            f"lang must be one of {sorted(SUPPORTED_LANGUAGES)!r}, got {lang!r}."
         )
     if kind not in _VALID_KINDS:
         raise ValueError(
