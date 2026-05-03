@@ -1,0 +1,10 @@
+language,domain,n_terms,n_found,oov_rate,best_k,best_silhouette
+en,color,11,11,0.0,8,0.0721
+en,emotion,18,18,0.0,3,-0.0284
+en,kinship,27,27,0.0,2,-0.0525
+es,color,11,11,0.0,6,0.052
+es,emotion,22,22,0.0,2,0.0074
+es,kinship,32,32,0.0,2,0.0301
+ru,color,12,12,0.0,4,0.0979
+ru,emotion,19,19,0.0,2,0.1037
+ru,kinship,34,34,0.0,2,0.1771

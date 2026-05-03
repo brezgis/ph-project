@@ -7,6 +7,7 @@ Used by all three sub-baselines (A, B, C) as the shared input layer.
 import logging
 
 import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
 from baselines import SUPPORTED_LANGUAGES
 
@@ -43,7 +44,7 @@ def cosine_distance_matrix(X: np.ndarray) -> np.ndarray:
     Parameters
     ----------
     X : np.ndarray, shape (n_terms, dim)
-        Row matrix of term vectors (one row per term).
+        Row matrix of term vectors (one row per term).  Must be 2-D.
 
     Returns
     -------
@@ -51,8 +52,23 @@ def cosine_distance_matrix(X: np.ndarray) -> np.ndarray:
         Symmetric pairwise cosine distance matrix.  D[i, j] = 1 - cos(X[i], X[j]).
         Diagonal is zero.  Values are in [0, 2] in principle but in [0, 1] for
         non-negative embedding spaces.
+
+        For n=0 returns shape (0, 0); for n=1 returns shape (1, 1) of zeros.
+
+    Raises
+    ------
+    ValueError
+        If *X* is not 2-dimensional.
     """
-    raise NotImplementedError
+    if X.ndim != 2:
+        raise ValueError(
+            f"cosine_distance_matrix requires a 2-D array; got ndim={X.ndim}"
+        )
+    n = X.shape[0]
+    if n < 2:
+        return np.zeros((n, n), dtype=float)
+    condensed = pdist(X, metric="cosine")
+    return squareform(condensed)
 
 
 def _lookup_vector(word: str, kv):
