@@ -4,13 +4,20 @@ distances — pairwise distance matrices and term vector extraction.
 Used by all three sub-baselines (A, B, C) as the shared input layer.
 """
 
-import sys
 import logging
 
 import numpy as np
 
 
 logger = logging.getLogger(__name__)
+
+
+def _warn_oov(term: str, lang: str, domain_ctx: str, detail: str = "") -> None:
+    """Emit an OOV warning via the module logger."""
+    extra = f" {detail}" if detail else ""
+    logger.warning(
+        "OOV: term=%r, lang=%r%s%s — excluded", term, lang, domain_ctx, extra
+    )
 
 # Per-language NP head position:
 #   EN: right-headed  ("maternal uncle"   → "uncle")
@@ -131,10 +138,10 @@ def extract_term_vectors(
 
     * FastText .bin (subword) — subword composition always yields a finite
       vector; no misses expected.  ``found_mask`` will be all-True.
-    * MUSE-aligned .vec (no subword) — missing tokens are logged to stderr
-      (including lang, domain context in caller) and flagged False in
-      ``found_mask``.  They are excluded from *matrix*; no zero-vector rows
-      are inserted.
+    * MUSE-aligned .vec (no subword) — missing tokens are emitted via the
+      ``baselines.distances`` logger at WARNING (including lang, and the
+      optional *domain* context) and flagged False in ``found_mask``.  They
+      are excluded from *matrix*; no zero-vector rows are inserted.
     """
     dim = vectors.vector_size
     n = len(terms)
@@ -149,10 +156,8 @@ def extract_term_vectors(
     else:
         # Unknown language: fall back to right-headed and warn
         _head_pos = "right"
-        print(
-            f"[extract_term_vectors] WARNING: unknown lang={lang!r}; "
-            f"defaulting to head_position='right'",
-            file=sys.stderr,
+        logger.warning(
+            "unknown lang=%r; defaulting to head_position='right'", lang
         )
 
     _domain_ctx = f", domain={domain!r}" if domain else ""
@@ -164,11 +169,7 @@ def extract_term_vectors(
             # Single-word term: attempt direct lookup
             vec = _lookup_vector(term, vectors)
             if vec is None:
-                print(
-                    f"[extract_term_vectors] OOV: term={term!r}, lang={lang!r}"
-                    f"{_domain_ctx} — excluded",
-                    file=sys.stderr,
-                )
+                _warn_oov(term, lang, _domain_ctx)
             else:
                 found_mask[i] = True
                 collected.append(vec)
@@ -187,12 +188,7 @@ def extract_term_vectors(
 
             vec = _lookup_vector(head_word, vectors)
             if vec is None:
-                print(
-                    f"[extract_term_vectors] OOV: term={term!r} "
-                    f"(head word={head_word!r}), lang={lang!r}"
-                    f"{_domain_ctx} — excluded",
-                    file=sys.stderr,
-                )
+                _warn_oov(term, lang, _domain_ctx, f"(head word={head_word!r})")
             else:
                 found_mask[i] = True
                 collected.append(vec)
@@ -202,20 +198,15 @@ def extract_term_vectors(
             for word in words:
                 wvec = _lookup_vector(word, vectors)
                 if wvec is None:
-                    print(
-                        f"[extract_term_vectors] OOV component: word={word!r} "
-                        f"in term={term!r}, lang={lang!r}{_domain_ctx} — skipped",
-                        file=sys.stderr,
+                    logger.warning(
+                        "OOV component: word=%r in term=%r, lang=%r%s — skipped",
+                        word, term, lang, _domain_ctx,
                     )
                 else:
                     component_vecs.append(wvec)
 
             if not component_vecs:
-                print(
-                    f"[extract_term_vectors] all components OOV: term={term!r}, "
-                    f"lang={lang!r}{_domain_ctx} — excluded",
-                    file=sys.stderr,
-                )
+                _warn_oov(term, lang, _domain_ctx, "(all components OOV)")
             else:
                 avg = np.mean(np.stack(component_vecs, axis=0), axis=0)
                 found_mask[i] = True

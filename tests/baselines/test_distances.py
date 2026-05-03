@@ -10,7 +10,6 @@ Covers:
   * output shape invariant: matrix.shape[0] == found_mask.sum()
 """
 import pathlib
-import sys
 
 import numpy as np
 import pytest
@@ -278,6 +277,35 @@ class TestErrorPaths:
         kv = _make_kv(["joy"])
         with pytest.raises(ValueError, match="strategy"):
             extract_term_vectors(["maternal uncle"], kv, strategy="bogus", lang="en")
+
+
+# ------------------------------------------------------------------
+# Boundary cases: empty input, all-OOV
+# ------------------------------------------------------------------
+
+class TestBoundaryCases:
+    def test_empty_input_returns_empty_matrix_and_mask(self):
+        """Empty terms list → matrix shape (0, dim), mask shape (0,)."""
+        from baselines.distances import extract_term_vectors
+
+        kv = _make_kv(["joy"], dim=8)
+        matrix, mask = extract_term_vectors([], kv, strategy="head", lang="en")
+
+        assert matrix.shape == (0, 8)
+        assert mask.shape == (0,)
+        assert mask.dtype == bool
+
+    def test_all_oov_returns_empty_matrix_and_all_false_mask(self):
+        """Every term OOV in MUSE-style vectors → (0, dim) matrix, all-False mask."""
+        from baselines.distances import extract_term_vectors
+
+        kv = _make_kv(["joy"], dim=8)  # nothing else in vocab
+        terms = ["unknown_a", "unknown_b", "unknown_c"]
+        matrix, mask = extract_term_vectors(terms, kv, strategy="head", lang="en")
+
+        assert matrix.shape == (0, 8)
+        assert mask.shape == (3,)
+        assert not mask.any()
 
 
 # ------------------------------------------------------------------
