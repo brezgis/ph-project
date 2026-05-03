@@ -46,6 +46,14 @@ notebook uses several, e.g. ``0.25``, ``0.5``, ``0.75``, ``0.95``).
 """
 
 import numpy as np
+import ripser
+
+
+# Structured dtype used for all barcode arrays (mirrors reference/ripser_count.py).
+_BARCODE_DTYPE = np.dtype([("birth", "f8"), ("death", "f8")])
+
+# Thresholds for the n-type features (matches reference/ripser_count.py usage).
+_THRESHOLDS = (0.25, 0.5, 0.75)
 
 
 def rips_barcode(D: np.ndarray, max_dim: int = 1) -> dict:
@@ -77,8 +85,69 @@ def rips_barcode(D: np.ndarray, max_dim: int = 1) -> dict:
         Implementations that wrap the ``ripser`` package (which returns
         plain ``(n, 2)`` arrays via ``result['dgms']``) must convert to
         the structured-array layout before returning.
+
+    Raises
+    ------
+    ValueError
+        If *D* fails any of the following pre-ripser checks:
+        - Not a 2-D ndarray
+        - Not square
+        - Not symmetric (within a small tolerance)
+        - Contains negative values
+        - Contains non-finite values (NaN or inf)
     """
-    raise NotImplementedError
+    # ------------------------------------------------------------------
+    # Input validation — firewall against the silent-zero-output bug
+    # (ph-project-mwk.3).  All checks happen BEFORE calling ripser.
+    # ------------------------------------------------------------------
+    if D.ndim != 2:
+        raise ValueError(
+            f"D must be a 2-D ndarray; got ndim={D.ndim}"
+        )
+    n_rows, n_cols = D.shape
+    if n_rows != n_cols:
+        raise ValueError(
+            f"D must be square; got shape ({n_rows}, {n_cols})"
+        )
+    if not np.isfinite(D).all():
+        raise ValueError(
+            "D must be finite (no NaN or inf); "
+            f"found {np.isnan(D).sum()} NaN(s) and {np.isinf(D).sum()} inf(s)"
+        )
+    if not np.allclose(D, D.T, atol=1e-8):
+        raise ValueError(
+            "D must be symmetric; max asymmetry = "
+            f"{np.max(np.abs(D - D.T)):.3e}"
+        )
+    if (D < 0.0).any():
+        raise ValueError(
+            "D must be non-negative; found values as small as "
+            f"{D.min():.6f}"
+        )
+
+    # ------------------------------------------------------------------
+    # Run Ripser (CPU ripser package, not ripserplusplus — per ssa.1 pin)
+    # ------------------------------------------------------------------
+    result = ripser.ripser(D, distance_matrix=True, maxdim=max_dim)
+    dgms = result["dgms"]  # list of (n_i, 2) plain float arrays
+
+    # ------------------------------------------------------------------
+    # Convert to structured arrays and strip infinite bars (barcode_pop_inf)
+    # ------------------------------------------------------------------
+    barcode: dict[int, np.ndarray] = {}
+    for dim in range(max_dim + 1):
+        plain = dgms[dim]  # shape (n_bars, 2), may be empty
+        # Strip bars whose death is +inf
+        finite_mask = np.isfinite(plain[:, 1])
+        finite = plain[finite_mask]
+        # Build structured array
+        sa = np.empty(len(finite), dtype=_BARCODE_DTYPE)
+        if len(finite) > 0:
+            sa["birth"] = finite[:, 0]
+            sa["death"] = finite[:, 1]
+        barcode[dim] = sa
+
+    return barcode
 
 
 def barcode_features(barcode: dict) -> dict:
@@ -86,6 +155,8 @@ def barcode_features(barcode: dict) -> dict:
 
     Feature-name convention mirrors ``reference/ripser_count.py``:
     ``h{dim}_{type}_{args}`` — see module docstring for the full spec.
+
+    h{d}_v computes std (not variance), matching Kushnareva naming.
 
     Parameters
     ----------
@@ -122,5 +193,75 @@ def barcode_features(barcode: dict) -> dict:
                  more/less than threshold ``t``.
     * ``*_t_b`` — birth time of the longest bar.
     * ``*_t_d`` — death time of the longest bar.
+
+    Exact feature list (deterministic order, for downstream comparison):
+
+    For each d in {0, 1}:
+        h{d}_s
+        h{d}_m
+        h{d}_v          (std, NOT variance — Kushnareva naming convention)
+        h{d}_e
+        h{d}_n_d_m_t0.25
+        h{d}_n_d_m_t0.5
+        h{d}_n_d_m_t0.75
+        h{d}_n_b_l_t0.25
+        h{d}_n_b_l_t0.5
+        h{d}_n_b_l_t0.75
+        h{d}_t_b
+        h{d}_t_d
     """
-    raise NotImplementedError
+    features: dict[str, float] = {}
+
+    for d in (0, 1):
+        prefix = f"h{d}"
+        bc = barcode.get(d, np.empty(0, dtype=_BARCODE_DTYPE))
+
+        if len(bc) == 0:
+            # Empty dimension: all features are 0.0
+            features[f"{prefix}_s"] = 0.0
+            features[f"{prefix}_m"] = 0.0
+            features[f"{prefix}_v"] = 0.0
+            features[f"{prefix}_e"] = 0.0
+            for t in _THRESHOLDS:
+                features[f"{prefix}_n_d_m_t{t}"] = 0.0
+                features[f"{prefix}_n_b_l_t{t}"] = 0.0
+            features[f"{prefix}_t_b"] = 0.0
+            features[f"{prefix}_t_d"] = 0.0
+            continue
+
+        lengths = bc["death"] - bc["birth"]
+
+        # s: sum of bar lengths
+        features[f"{prefix}_s"] = float(np.sum(lengths))
+
+        # m: mean of bar lengths
+        features[f"{prefix}_m"] = float(np.mean(lengths))
+
+        # v: STANDARD DEVIATION of bar lengths (named 'v' per Kushnareva; NOT variance)
+        features[f"{prefix}_v"] = float(np.std(lengths))
+
+        # e: persistence entropy -Σ (l_i/L) log(l_i/L); 0.0 when empty or L==0
+        L = np.sum(lengths)
+        if L <= 0.0:
+            features[f"{prefix}_e"] = 0.0
+        else:
+            p = lengths / L
+            # Guard against log(0) — should not occur if L>0 and lengths>=0,
+            # but be safe.
+            p = p[p > 0]
+            features[f"{prefix}_e"] = float(-np.sum(p * np.log(p)))
+
+        # n_d_m_t<T>: count of bars with death >= T
+        for t in _THRESHOLDS:
+            features[f"{prefix}_n_d_m_t{t}"] = float(np.sum(bc["death"] >= t))
+
+        # n_b_l_t<T>: count of bars with birth <= T
+        for t in _THRESHOLDS:
+            features[f"{prefix}_n_b_l_t{t}"] = float(np.sum(bc["birth"] <= t))
+
+        # t_b, t_d: birth/death of the longest finite bar (argmax of length)
+        max_idx = int(np.argmax(lengths))
+        features[f"{prefix}_t_b"] = float(bc["birth"][max_idx])
+        features[f"{prefix}_t_d"] = float(bc["death"][max_idx])
+
+    return features
