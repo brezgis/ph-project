@@ -1,0 +1,10 @@
+lang_pair,domain,mean_distance,marker
+EN-RU,color,0.4795,
+EN-ES,color,0.4929,
+RU-ES,color,0.4837,
+EN-RU,emotion,0.5938,
+EN-ES,emotion,0.5604,
+RU-ES,emotion,0.6108,
+EN-RU,kinship,0.4049,⚠
+EN-ES,kinship,0.377,⚠
+RU-ES,kinship,0.4659,⚠
