@@ -6,7 +6,7 @@ MAIN = overview
 .PHONY: pdf clean
 
 pdf:
-	latexmk -lualatex $(MAIN).tex
+	latexmk $(MAIN).tex
 
 clean:
 	latexmk -C $(MAIN).tex

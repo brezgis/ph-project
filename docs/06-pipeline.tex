@@ -3,7 +3,7 @@
 
 \section{The original task}
 
-\textcite{kushnareva2021} set out to distinguish human-written text from machine-generated text---specifically, WebText (human) from GPT-2 Small 117M output---using topological features extracted from BERT attention graphs. Their claim is simple and elegant: human and machine text produce systematically different \emph{shapes} in the attention map, and those shapes are measurable without fine-tuning the model. A logistic regression over topological features achieves 93--98\% accuracy across three benchmarks, outperforming count-based and neural baselines while remaining interpretable.
+\textcite{kushnareva2021} set out to distinguish human-written text from machine-generated text---specifically, WebText (human) from GPT-2 Small 117M output---using topological features extracted from BERT attention graphs. Their claim is simple and elegant: human and machine text produce systematically different \emph{shapes} in the attention map, and those shapes are measurable without fine-tuning the model. A logistic regression over topological features achieves 93--98\% accuracy across three benchmarks \parencite{kushnareva2021}, outperforming count-based and neural baselines while remaining interpretable.
 
 Their full pipeline runs end-to-end as follows. A corpus of labeled sentences (human vs.\ generated) is tokenized with the BERT WordPiece tokenizer, truncated or padded to a fixed length of 128 tokens. Each sentence passes through BERT with \texttt{output\_attentions=True}, yielding one $128 \times 128$ attention matrix per (layer $\ell$, head $h$) pair---that is, $12 \times 12 = 144$ attention matrices per sentence. From each matrix, three families of topological features are extracted. The features for all 144 (layer, head) pairs are concatenated into a single feature vector per sentence, and a logistic regression classifier separates the two classes.
 
@@ -11,7 +11,7 @@ What matters for us is that the classifier is the least interesting part. The ex
 
 \section{Three feature families}
 
-Kushnareva's pipeline extracts three families of features from each per-(layer, head) attention matrix. \autoref{ch:ph} introduces the mathematics of persistent homology; here we describe how each family is \emph{computed in the pipeline} and what each one measures about a specific attention matrix.
+Kushnareva's pipeline extracts three families of features from each per-(layer, head) attention matrix. \autoref{ch:persistent-homology} introduces the mathematics of persistent homology; here we describe how each family is \emph{computed in the pipeline} and what each one measures about a specific attention matrix.
 
 \subsection{Threshold features}
 
@@ -29,7 +29,7 @@ The output tensor has shape (12 layers $\times$ 12 heads $\times$ 6 feature type
 
 \subsection{Barcode features}
 
-The second family applies Ripser \parencite{bauer2021} to the attention matrix after a filtration transform. The attention matrix is first made symmetric by taking the element-wise minimum of $W$ and $W^\top$---an edge appears when \emph{either} direction exceeds the threshold, which is the most inclusive choice. Weights are then inverted ($1 - W_{ij}$) so that high attention becomes short distance, and the diagonal is zeroed. Ripser computes the Vietoris--Rips persistence diagram up to dimension 1 ($H_0$ and $H_1$).
+The second family applies Ripser \parencite{bauer2021} to the attention matrix after a filtration transform. The attention matrix is first made symmetric by taking the element-wise maximum of $W$ and $W^\top$---an edge appears when \emph{either} direction exceeds the threshold, which is the most inclusive choice and matches the symmetrization used in \autoref{ch:graphs}. Weights are then inverted ($1 - W_{ij}$) so that high attention becomes short distance, and the diagonal is zeroed. Ripser computes the Vietoris--Rips persistence diagram up to dimension 1 ($H_0$ and $H_1$).
 
 From the resulting persistence pairs $(b_i, d_i)$, Kushnareva extracts 14 scalar summary statistics:
 

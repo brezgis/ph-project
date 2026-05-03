@@ -9,9 +9,16 @@ cd docs/
 make pdf
 ```
 
-This runs `latexmk -lualatex` with biber for bibliography processing. Requires LuaLaTeX, biber, and latexmk on PATH.
+This runs `latexmk` (configured by `.latexmkrc` to use lualatex + biber).
 
 Output: `overview.pdf`
+
+### Prerequisites
+
+- TeX Live (lualatex, latexmk, biber). On Debian/Ubuntu:
+  `sudo apt install texlive-luatex texlive-bibtex-extra biber`
+  Or with TinyTeX: `tlmgr install biber biblatex` (TinyTeX is minimal by default).
+- Fonts: DejaVu Serif and DejaVu Sans Mono (Cyrillic fallback and box-drawing characters in the codebase tour). On Debian/Ubuntu: `sudo apt install fonts-dejavu`.
 
 ## Structure
 

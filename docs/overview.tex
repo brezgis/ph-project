@@ -71,12 +71,9 @@
 \input{08-tooling}
 \input{09-results}
 
-% --- Figures ---
-% filtration.tex and persistence-diagram.tex are \input'd from
-% 05-persistent-homology.tex (lines 131, 231).
-% pipeline.tex is ready at figures/pipeline.tex; the chapter-6 agent
-% placed a placeholder figure with \label{fig:pipeline} that should be
-% replaced with \input{figures/pipeline} once the placeholder is removed.
+% Figures live in figures/. Each chapter \inputs the figures it owns:
+%   ch5 \inputs filtration.tex and persistence-diagram.tex
+%   ch6 \inputs pipeline.tex
 
 % --- Bibliography ---
 \printbibliography

@@ -36,7 +36,7 @@ Every factual or empirical claim cites a BibTeX entry. No "[citation needed]" or
 - Parenthetical citation: `\parencite{berlin1969}` renders as "(Berlin & Kay, 1969)"
 - Inline-by-name: `\textcite{winawer2007}` renders as "Winawer et al. (2007)"
 
-If your chapter needs a bib entry not already in `refs.bib`, add it there as part of your chapter task. The consistency review will deduplicate; do not coordinate manually across chapters.
+When adding a citation, scan `refs.bib` for an existing match before appending. New entries should follow the style of the existing thematic groups (color, emotion, kinship, attention, topology) and use real DOIs / ACL anthology IDs / publisher info — not placeholders.
 
 ## Math typesetting
 
@@ -87,11 +87,15 @@ The notation table should cover at minimum: $\varepsilon$, $d$, $W$, $\beta_0$, 
 Use `\autoref` for all internal references. It generates "Chapter 5", "Figure 3.1", "Section 2.3" automatically.
 
 Label conventions:
-- Chapters: `\label{ch:motivation}`, `\label{ch:persistent-homology}`
+- One label per chapter, full name (e.g., `\label{ch:persistent-homology}`, not `\label{ch:ph}`). Aliases drift; pick the long form and stick with it.
 - Sections: `\label{sec:russian-blue}`, `\label{sec:filtration}`
 - Figures: `\label{fig:pipeline}`, `\label{fig:persistence-diagram}`
 - Tables: `\label{tab:notation}`, `\label{tab:term-counts}`
 - Equations: `\label{eq:distance}`, `\label{eq:betti}`
+
+Cyrillic and Spanish accents render natively under LuaLaTeX with the
+luaotfload Cyrillic fallback configured in `overview.tex`. Write Cyrillic
+inline as bare Unicode — no `\cyr{...}` wrapper needed.
 
 ## Length
 

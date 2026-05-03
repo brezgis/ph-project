@@ -3,17 +3,18 @@
 
 \begin{figure}[H]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
     >=Stealth,
     block/.style={
         rectangle, draw=black!70, fill=white,
-        minimum height=2.2em, minimum width=6.5em,
+        minimum height=2.2em, minimum width=5.5em,
         text centered, font=\small,
         rounded corners=2pt, thick
     },
     arrow/.style={->, thick, black!70},
     brace label/.style={font=\small\itshape, text=black!70},
-    node distance=1.0cm and 0.6cm
+    node distance=0.8cm and 0.4cm
 ]
 
 % --- Pipeline blocks (left to right) ---
@@ -41,7 +42,8 @@
     (filt.north west) -- (comp.north east)
     node[midway, above=16pt, brace label] {topology};
 
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{%
     The ph-project pipeline. We extract keyword-in-context (KWIC) windows
     from multilingual corpora, run them through mBERT to obtain per-head
