@@ -1,2 +1,191 @@
 \chapter{Codebase tour}
-% TODO: chapter body
+\label{ch:codebase}
+
+This chapter walks through the repository as it exists today. We describe each top-level directory, its purpose, how it relates to the others, and where a new reader should start. The layout is empirical---everything named here can be verified with \texttt{ls}.
+
+\section{Top-level layout}
+
+The project root contains ten directories and a handful of configuration files:
+
+\begin{verbatim}
+ph-project/
+├── baselines/       Python modules for the fastText baseline pipeline
+├── canon-terms/     Literature-grounded term lists (3 langs × 3 domains)
+├── data/            Corpora, KWIC, attention matrices (gitignored)
+├── docs/            This document and its build system
+├── notebooks/       Adapted analysis notebooks (our cross-linguistic task)
+├── reference/       Kushnareva et al. originals (frozen, never edited)
+├── replication/     End-to-end run of Kushnareva's native task
+├── results/         Experiment outputs (gitignored)
+├── scripts/         Utility shells (download, auth)
+├── tests/           pytest suite
+├── .beads/          Issue tracking (bd)
+├── AGENTS.md        Workflow documentation for bd
+├── CLAUDE.md        Project rules and structure
+└── requirements.txt Python dependencies
+\end{verbatim}
+
+The distinction that matters most is the three-way split between \texttt{reference/}, \texttt{replication/}, and \texttt{notebooks/}. These represent, respectively, the frozen upstream code, a sanity-check run of that code on its original task, and our actual adapted pipeline. We take them in turn.
+
+\section{The frozen originals: \texttt{reference/}}
+\label{sec:reference}
+
+This directory holds a verbatim copy of the code published alongside \textcite{kushnareva2021}. Its contents:
+
+\begin{itemize}
+  \item Three Jupyter notebooks:
+    \begin{itemize}
+      \item \texttt{features\_calculation\_by\_thresholds.ipynb} --- topological invariants at discrete thresholds (Section 4.1 of the paper).
+      \item \texttt{features\_calculation\_ripser\_and\_templates.ipynb} --- barcode features via Ripser and template-distance features (Sections 4.2--4.3).
+      \item \texttt{features\_prediction.ipynb} --- logistic regression on the extracted features.
+    \end{itemize}
+  \item Four Python modules: \texttt{grab\_weights.py} (tokenization and attention extraction), \texttt{ripser\_count.py} (barcode computation), \texttt{stats\_count.py} (summary statistics over barcodes), and \texttt{utils.py} (shared helpers).
+  \item \texttt{KUSHNAREVA\_README.md} --- the original repository README.
+\end{itemize}
+
+The hard rule governing this directory is absolute: \emph{no edits, by anyone or anything, for any reason.} The tree exists so we can diff our adapted code against it line by line, verifying that structural changes are intentional rather than accidental drift. Anna may annotate these files for her own comprehension; AI agents treat them as byte-for-byte immutable.
+
+\section{Sanity-checking the original: \texttt{replication/}}
+\label{sec:replication}
+
+Before adapting Kushnareva's pipeline to our cross-linguistic task, we run it end-to-end on its native task (binary classification of human vs.\ GPT-2 text). This is not a project deliverable---it exists to build understanding. Three goals motivate it:
+
+\begin{enumerate}
+  \item \textbf{Stack sanity check.} Verify that CUDA, Ripser, and the mBERT load path all work on this hardware before introducing our changes.
+  \item \textbf{Feature intuition.} See the actual shape and scale of the topology feature tensors rather than inferring them from the paper alone.
+  \item \textbf{Reference numbers.} Establish a baseline accuracy on north that any future port can be compared against.
+\end{enumerate}
+
+The directory contains:
+
+\begin{itemize}
+  \item \texttt{notebooks/} --- editable copies of the three reference notebooks, patched to run against local data paths. An executed version of the thresholds notebook already exists here.
+  \item \texttt{grab\_weights\_compat.py} --- a four-line shim around the modern \texttt{transformers} tokenizer API. The original \texttt{grab\_weights.py} calls the now-removed \texttt{batch\_encode\_plus(..., pad\_to\_max\_length=True)}; the compat shim replaces this with the current \texttt{tokenizer()} call using \texttt{padding="max\_length"}. This lets the frozen reference code run unchanged---we swap the import, not the source.
+  \item \texttt{scripts/} --- seven utility scripts. The most notable are \texttt{launch\_jupyter.sh} and \texttt{launch\_kernel.sh}, which wrap Jupyter in a systemd user scope with a memory cap so a runaway Ripser cell kills only the kernel, not the host (see \autoref{ch:tooling}). \texttt{install\_kernel\_spec.py} registers this capped kernel for VS Code.
+  \item \texttt{Kushnareva-2021-EMNLP.pdf} --- the paper itself, for quick reference.
+  \item \texttt{data/} and \texttt{outputs/} --- gitignored; populated by the download and compute steps described in the replication README.
+\end{itemize}
+
+\section{Our adapted notebooks: \texttt{notebooks/}}
+\label{sec:notebooks}
+
+This is where the project's own analysis lives. Currently it holds four baseline notebooks for the fastText sub-baselines (Phase 2 of the project):
+
+\begin{enumerate}
+  \item \texttt{baseline\_A\_descriptive.ipynb} --- language-specific descriptive clustering on fastText CC-300 embeddings.
+  \item \texttt{baseline\_B\_topological.ipynb} --- language-specific topological features (persistent homology on fastText distance matrices).
+  \item \texttt{baseline\_C\_aligned.ipynb} --- cross-lingual analysis using MUSE-aligned embeddings.
+  \item \texttt{baseline\_comparison.ipynb} --- comparison across the three sub-baselines.
+\end{enumerate}
+
+The mBERT attention notebooks---the core of the project---will land here under the \texttt{ph-project-mwk} epic once the Kushnareva adaptation is complete. When they arrive, they will follow the notebook-faithful rule: preserve Kushnareva's structure and function names, changing only the inputs (our term-anchored sentences across three languages) and the final analysis step (cross-linguistic comparison instead of binary classification).
+
+\section{Literature-grounded term lists: \texttt{canon-terms/}}
+\label{sec:canon-terms}
+
+Every experiment in this project starts from a curated list of terms in each semantic domain (color, emotion, kinship) and each language (English, Russian, Spanish). These lists are not assembled informally; each term traces to a specific publication.
+
+The directory holds:
+
+\begin{itemize}
+  \item \texttt{SCHEMA.md} --- the governing format specification. Term files are YAML with required fields: \texttt{domain}, \texttt{language}, \texttt{description}, \texttt{sources} (with citation role annotations), \texttt{terms} (each citing its licensing publication), and \texttt{deviations} (explicit documentation of any divergence from sources).
+  \item Three research reports (\texttt{color\_report.md}, \texttt{emotion\_report.md}, \texttt{kinship\_report.md}) summarizing the literature that motivates each domain's inventory.
+  \item Nine YAML term files organized as \texttt{en/}, \texttt{ru/}, \texttt{es/}, each containing \texttt{color.yaml}, \texttt{emotion.yaml}, and \texttt{kinship.yaml}.
+\end{itemize}
+
+The citation short-form convention (e.g., ``Berlin \& Kay 1969'') must unambiguously resolve to exactly one entry in the file's \texttt{sources} list. Multi-word terms are permitted; head-word extraction for embedding lookup is handled per-language in the baselines code.
+
+\section{Baseline modules: \texttt{baselines/}}
+\label{sec:baselines}
+
+This package provides the Python source modules for the Phase 2 fastText baselines. It contains five files:
+
+\begin{itemize}
+  \item \texttt{\_\_init\_\_.py} --- defines \texttt{SUPPORTED\_LANGUAGES} (a frozenset of \texttt{\{en, ru, es\}}) as the single source of truth for the language set.
+  \item \texttt{vectors.py} --- fastText model loading and term-vector extraction with per-language head-word identification.
+  \item \texttt{distances.py} --- pairwise distance computation between term vectors.
+  \item \texttt{clustering.py} --- hierarchical and k-means clustering over distance matrices.
+  \item \texttt{topology.py} --- persistent homology computation on the distance matrices (Ripser interface, Betti curve extraction).
+\end{itemize}
+
+The notebooks in \texttt{notebooks/} import from these modules. Separating the logic into a proper package means the notebooks stay readable (high-level flow) while the implementations remain testable.
+
+\section{Tests: \texttt{tests/}}
+\label{sec:tests}
+
+The test suite lives in \texttt{tests/} and uses pytest. It covers two areas:
+
+\begin{itemize}
+  \item \textbf{Baselines} (\texttt{tests/baselines/}): unit tests for each module---\texttt{test\_vectors.py}, \texttt{test\_distances.py}, \texttt{test\_clustering.py}, \texttt{test\_topology.py}, and \texttt{test\_init.py} (the supported-languages gate).
+  \item \textbf{Replication infrastructure}: \texttt{test\_replication\_features.py} (feature tensor shapes), \texttt{test\_ripser\_mmap.py} (memory-mapped Ripser regression), \texttt{test\_install\_kernel\_spec.py}, \texttt{test\_launch\_jupyter\_sh.py}, \texttt{test\_launch\_kernel\_sh.py}, and \texttt{test\_patch\_notebook.py} (the notebook-patching script that applies replication-specific edits).
+\end{itemize}
+
+The quality gate before any commit is \texttt{pytest tests/}. Tests that require GPU or large downloads are marked to skip in CI.
+
+\section{Data and results}
+\label{sec:data-results}
+
+Both \texttt{data/} and \texttt{results/} are gitignored. They are populated by running experiments:
+
+\begin{itemize}
+  \item \texttt{data/} expects subdirectories for corpora, KWIC extracts, attention matrices, and fastText model files.
+  \item \texttt{results/} holds experiment outputs. Currently only \texttt{results/baseline\_A/} is populated (dendrograms, silhouette plots, and a summary CSV from the descriptive clustering baseline).
+\end{itemize}
+
+One important note: the replication pipeline writes its outputs to \texttt{replication/outputs/} (with subdirectories for attentions, barcodes, and features), not to the top-level \texttt{results/}. The two output locations reflect the two pipelines: replication outputs belong to the sanity-check run; top-level results belong to our cross-linguistic analysis.
+
+\section{Scripts and utilities}
+\label{sec:scripts}
+
+The top-level \texttt{scripts/} directory holds three shell scripts:
+
+\begin{itemize}
+  \item \texttt{download\_fasttext.sh} --- fetches the pre-trained fastText CC-300 models for en, ru, and es.
+  \item \texttt{generate-github-app-token.sh} and \texttt{setup-github-app.sh} --- GitHub App authentication for CI.
+\end{itemize}
+
+These are distinct from \texttt{replication/scripts/}, which contains the replication-specific utilities (data download, CSV preparation, the cgroup-capped Jupyter wrapper).
+
+\section{Issue tracking: \texttt{.beads/} and \texttt{AGENTS.md}}
+\label{sec:beads}
+
+All task tracking uses \texttt{bd} (beads), a dependency-aware issue tracker that auto-syncs to \texttt{.beads/issues.jsonl} on every git operation. No markdown TODO files, no external trackers. \texttt{AGENTS.md} documents the workflow: slash commands (\texttt{/plan}, \texttt{/work}, \texttt{/merge}), issue types, priority levels, and the dependency model.
+
+The project is organized into epics corresponding to its phases:
+
+\begin{itemize}
+  \item \texttt{ph-project-5f9} --- Phase 1: KWIC extraction.
+  \item \texttt{ph-project-ssa} --- Phase 2: fastText baselines.
+  \item \texttt{ph-project-0cm} --- Phase 3: mBERT attention + persistent homology.
+  \item \texttt{ph-project-bt5} --- Phase 4: comparison and prediction tests.
+  \item \texttt{ph-project-vdh} --- Phase 5: final writeup.
+  \item \texttt{ph-project-mwk} --- the notebook-faithful Kushnareva adaptation (cross-cutting).
+  \item \texttt{ph-project-p9f} --- this textbook overview.
+\end{itemize}
+
+Dependencies between tasks are tracked explicitly; \texttt{bd ready} shows only unblocked work. This means an agent (or Anna) can ask ``what can I do next?'' and get a concrete answer rather than scanning a list.
+
+\section{Hard rules}
+\label{sec:hard-rules}
+
+Four rules govern contributions to this codebase, stated in \texttt{CLAUDE.md} and enforced socially:
+
+\begin{enumerate}
+  \item \textbf{Never edit \texttt{reference/}.} No exceptions for AI agents. The tree is frozen for reproducibility.
+  \item \textbf{Notebook-faithful adaptation.} Preserve Kushnareva's structure and function names in our adapted notebooks. Change inputs and the final analysis step; nothing else.
+  \item \textbf{Term lists cite publications.} Every canon term must trace to a named source. Deviations are documented explicitly in the YAML file's \texttt{deviations} field.
+  \item \textbf{Use bd for all tracking.} No markdown TODOs, no scattered notes. If it needs doing, it is a beads issue.
+\end{enumerate}
+
+\section{Where to start reading}
+\label{sec:where-to-start}
+
+A new reader approaching this codebase should begin with three files:
+
+\begin{enumerate}
+  \item \texttt{CLAUDE.md} at the project root---it gives the hypothesis, the methodology, the hard rules, and the directory layout in one page.
+  \item \texttt{canon-terms/color\_report.md}---the most readable entry point into what the project is actually \emph{about}. It walks through the Berlin \& Kay tradition, the Russian blue split, and how we selected terms.
+  \item \texttt{replication/README.md}---it explains why the replication exists, how it relates to \texttt{reference/}, and how to run it. Understanding this document makes the three-way split (\texttt{reference/} vs.\ \texttt{replication/} vs.\ \texttt{notebooks/}) concrete rather than abstract.
+\end{enumerate}
+
+From there, the \texttt{baselines/} package and its tests are the most self-contained code to read---small modules with clear inputs and outputs, exercised by a full test suite. The notebooks that call into them show how the pieces compose into an analysis.

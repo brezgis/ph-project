@@ -1,2 +1,211 @@
 \chapter{From attention to graphs}
-% TODO: chapter body
+\label{ch:graphs}
+
+The previous chapter left us with a concrete object: for each sentence, each of
+mBERT's 12 layers and 12 heads produces an attention matrix $W$ of shape
+$n \times n$, where $n$ is the number of tokens.  Each entry $W_{ij}$ records
+how much token $i$ attended to token $j$ --- a real number in $[0, 1]$ whose
+rows sum to one (the softmax constraint from \textcite{vaswani2017}).  This
+chapter asks: how do we turn that matrix into a \emph{graph} whose topology we
+can measure?
+
+The answer is deceptively simple in outline --- tokens become nodes, attention
+scores become edge weights --- but the details matter enormously.  Thresholding
+choices, handling of special tokens, symmetrization strategy, and the decision
+to work per-head rather than aggregating all determine what topological signal
+survives.  We walk through each decision in turn, grounding our account in the
+specific procedure implemented by \textcite{kushnareva2021}.
+
+\section{Tokens as nodes, attention as edges}
+
+We begin with the intuition.  A sentence tokenized by mBERT's WordPiece
+tokenizer produces a sequence of $n$ tokens (including special tokens \texttt{[CLS]}
+and \texttt{[SEP]}).  We treat each token position as a node in a directed
+graph.  A directed edge from node $i$ to node $j$ exists if token $i$ attends
+to token $j$ with weight exceeding some threshold --- that is, if $W_{ij}$
+is ``large enough.''  The raw attention matrix is thus an adjacency matrix
+for a complete weighted digraph; our job is to extract a family of sparser
+graphs from it that reveal structure.
+
+Why directed?  Because attention is inherently asymmetric: the fact that
+``red'' attends heavily to ``ball'' does not imply ``ball'' attends heavily
+to ``red.''  \textcite{clark2019} demonstrated that BERT's attention heads
+specialize in different syntactic patterns --- some attend to the next token,
+others to the previous, others to syntactic governors --- and these asymmetries
+carry information.  Discarding directionality prematurely would lose exactly the
+structure we want to detect.
+
+\section{Trimming the matrix: padding and special tokens}
+\label{sec:trimming}
+
+Before any thresholding, we must handle a bookkeeping detail that turns out to
+be structurally important.  mBERT pads all sentences to a fixed length
+($n_{\max} = 128$ in Kushnareva's setup): short sentences get \texttt{[PAD]}
+tokens appended.  The attention weights associated with pad positions are
+artifacts of the model's architecture, not reflections of linguistic content.
+
+Kushnareva's code addresses this with a utility function (\texttt{cutoff\_matrix})
+that slices the $n_{\max} \times n_{\max}$ matrix down to the first $n_{\text{real}}$
+tokens --- those that are not padding.  After slicing, rows are renormalized so
+that each row sums to one.  We denote the trimmed, renormalized matrix as
+$W'$.
+
+A subtlety: the \texttt{[CLS]} and \texttt{[SEP]} tokens are \emph{not} removed.
+They remain as nodes in the graph.  This is a design choice worth pausing on.
+\textcite{clark2019} showed that several BERT attention heads devote most of
+their probability mass to \texttt{[CLS]} or \texttt{[SEP]} --- functioning
+almost as ``no-op'' heads that dump attention onto special tokens when no
+informative pattern is available.  Including these tokens means our graphs
+will reflect that behavior; excluding them would simplify the graph but hide
+a real structural pattern.  Kushnareva keeps them in, and so do we.
+
+\section{Thresholding: from weighted to binary}
+\label{sec:thresholding}
+
+With $W'$ in hand, we convert the weighted directed graph to an unweighted
+one by choosing a threshold $\varepsilon$: an edge from $i$ to $j$ exists if
+and only if $W'_{ij} \geq \varepsilon$.  Formally, define the binary
+adjacency matrix
+
+\[
+  A^{(\varepsilon)}_{ij} =
+  \begin{cases}
+    1 & \text{if } W'_{ij} \geq \varepsilon, \\
+    0 & \text{otherwise.}
+  \end{cases}
+\]
+
+A low threshold ($\varepsilon = 0.025$) retains almost all edges --- the graph
+is dense, most nodes connect to most others.  A high threshold
+($\varepsilon = 0.75$) keeps only the strongest attention links --- the graph
+is sparse, and most nodes stand isolated or in small clusters.
+
+Kushnareva's implementation uses a fixed set of six thresholds:
+$\varepsilon \in \{0.025, 0.05, 0.1, 0.25, 0.5, 0.75\}$.  For each
+threshold, a separate binary graph is produced.  This family of graphs,
+ordered by increasing $\varepsilon$, is a \emph{filtration} --- a nested
+sequence where every edge present at threshold $\varepsilon_2$ is also present
+at any lower threshold $\varepsilon_1 < \varepsilon_2$.  (The nesting follows
+directly from the definition: if $W'_{ij} \geq \varepsilon_2 > \varepsilon_1$,
+then $W'_{ij} \geq \varepsilon_1$ as well.)
+
+This discrete filtration is the bridge to topology.  As $\varepsilon$ rises,
+edges disappear, connected components fragment, and cycles break.  Tracking
+\emph{when} these structural changes occur --- which values of $\varepsilon$
+give birth to a new component or kill a cycle --- is exactly the data that
+persistent homology captures.  We defer the formalism to \autoref{ch:persistent-homology};
+what matters here is that the threshold sweep produces the raw material for
+that analysis.
+
+\section{Directed graphs and the Betti number computation}
+\label{sec:directed}
+
+The graphs produced by thresholding are directed (asymmetric).  Kushnareva's
+pipeline extracts some features that respect directionality --- strongly
+connected components, simple cycles, edge counts --- and also computes Betti
+numbers $\beta_0$ and $\beta_1$, which are defined for undirected graphs.  How
+is the mismatch resolved?
+
+The code converts each directed graph to undirected before computing Betti
+numbers: edges are treated as undirected, and multi-edges (from the directed
+pair $i \to j$ and $j \to i$ both surviving the threshold) collapse into a
+single undirected edge.  Formally, the undirected adjacency is
+$A^{(\varepsilon, \text{undir})}_{ij} = \max(A^{(\varepsilon)}_{ij},
+A^{(\varepsilon)}_{ji})$.  This is a ``max'' symmetrization: an undirected edge
+exists if attention flows in \emph{either} direction above threshold.
+
+From the undirected graph $G$ with $v$ vertices, $e$ edges, and $w$ connected
+components, the Betti numbers follow immediately from elementary graph theory:
+\[
+  \beta_0 = w, \qquad \beta_1 = e - v + w.
+\]
+$\beta_0$ counts connected components (isolated clusters of tokens);
+$\beta_1$ counts independent cycles (loops in the attention pattern).
+The formula for $\beta_1$ is the Euler characteristic relation for a
+one-dimensional simplicial complex --- we explain why in
+\autoref{ch:persistent-homology}.
+
+\section{Per-head analysis: why not aggregate?}
+\label{sec:per-head}
+
+A natural question: why compute features for each of the $12 \times 12 = 144$
+attention heads separately, rather than averaging or concatenating attention
+across heads?
+
+The answer is that different heads encode qualitatively different patterns.
+\textcite{clark2019} showed that some heads in BERT specialize in syntactic
+dependencies (subject-verb, determiner-noun), others in positional patterns
+(attend to next or previous token), and still others act as broad
+``diffuse-attention'' heads.  Averaging across heads would blend these
+distinct signatures into mush.  The topology of a head that attends narrowly
+to the syntactic governor is genuinely different from the topology of a head
+that spreads attention uniformly --- and that difference is exactly what we want
+our topological features to capture.
+
+Kushnareva's pipeline therefore processes each (layer, head) pair independently.
+For a single text, the output is a feature tensor of shape:
+\[
+  \text{layers} \times \text{heads} \times \text{thresholds} \times
+  \text{features}
+  \;=\; 12 \times 12 \times 6 \times k
+\]
+where $k$ is the number of graph-theoretic features being computed (strongly
+connected components, edge count, average degree, cycle count, $\beta_0$, $\beta_1$
+yields $k = 6$ in the default configuration).  Across a corpus of $N$ texts,
+this becomes a five-dimensional array --- a rich feature space that downstream
+classifiers or comparisons can mine.
+
+\section{The Ripser path: distance matrices and full persistence}
+\label{sec:ripser-path}
+
+The threshold-sweep approach described above computes graph features at a
+\emph{discrete} set of $\varepsilon$ values.  Kushnareva's second notebook
+takes a complementary approach: instead of choosing thresholds by hand, it
+feeds the attention matrix to Ripser \parencite{bauer2021}, which computes
+the full persistence barcode in one pass.
+
+This requires a small transformation.  Ripser expects a \emph{distance matrix}:
+a symmetric matrix where smaller values mean ``closer'' (edges appear early
+in the filtration) and the diagonal is zero.  Attention weights are the
+opposite: higher means stronger affinity.  The conversion is:
+
+\[
+  D_{ij} = 1 - W'_{ij}, \qquad D_{ii} = 0.
+\]
+
+Symmetrization uses the minimum: $D^{\text{sym}}_{ij} = \min(D_{ij}, D_{ji})$.
+Because $D_{ij} = 1 - W'_{ij}$, taking the min of distances corresponds to
+taking the \emph{max} of attention weights --- an edge appears in the Rips
+complex at the threshold where the stronger of the two directed attention
+scores is high enough.  This is the same ``max'' logic as the Betti number
+computation above, just expressed in the dual (distance) frame.
+
+A lower bound on attention ($10^{-3}$ in Kushnareva's code) filters out
+near-zero weights before the distance transform, preventing a flood of
+near-distance-one edges from dominating the complex.
+
+The Ripser path produces continuous barcodes --- birth-death pairs for $H_0$
+and $H_1$ features --- from which summary statistics (total persistence,
+entropy, number of bars above a threshold) are extracted.  We describe these
+statistics properly in \autoref{ch:persistent-homology}; the point here is that
+the graph construction step (trimming, distance transform, symmetrization)
+feeds directly into a standard TDA pipeline without requiring manually chosen
+threshold values.
+
+\section{What we have built}
+
+Starting from a raw $n_{\max} \times n_{\max}$ attention matrix:
+
+\begin{enumerate}
+  \item We trim padding positions and renormalize rows (preserving \texttt{[CLS]} and \texttt{[SEP]}).
+  \item We threshold at each $\varepsilon$ in a fixed set, producing a nested family of binary directed graphs.
+  \item For directed-graph features (components, cycles, degree), we work on the digraph directly.
+  \item For Betti numbers and for the Ripser path, we symmetrize via ``max'' (retaining an edge if either direction exceeds threshold) and compute on the resulting undirected structure.
+  \item We do all of this per layer and per head, preserving the diversity of attention patterns.
+\end{enumerate}
+
+The output is a family of graphs --- one per head, per threshold --- ready for
+topological measurement.  \autoref{ch:persistent-homology} introduces the
+machinery that turns these graphs into persistence diagrams and barcodes;
+\autoref{ch:pipeline} describes how the full pipeline orchestrates the
+computation end-to-end.

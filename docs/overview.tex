@@ -2,10 +2,23 @@
 % Compile with: lualatex (or xelatex) via latexmk
 \documentclass[11pt,a4paper]{report}
 
-% --- Fonts (LuaLaTeX / XeLaTeX) ---
+% --- Fonts (LuaLaTeX) ---
 \usepackage{fontspec}
 \defaultfontfeatures{Ligatures=TeX}
-% fontspec handles Cyrillic and Spanish accents natively under LuaLaTeX
+% Latin Modern (default) lacks Cyrillic. Set up a luaotfload font fallback so
+% bare Cyrillic codepoints render via DejaVu Serif, which has a similar
+% academic feel and good Cyrillic coverage. Any character not in Latin Modern
+% (Cyrillic in particular) is drawn from the fallback family.
+\directlua{
+  luaotfload.add_fallback("cyrfallback", { "DejaVu Serif:script=cyrl;" })
+}
+\setmainfont{Latin Modern Roman}[RawFeature={fallback=cyrfallback}]
+% Latin Modern Mono lacks box-drawing characters used in chapter 7's tree
+% diagram; DejaVu Sans Mono covers the BOX DRAWING block.
+\setmonofont{DejaVu Sans Mono}[Scale=MatchLowercase]
+% \cyr{...} from chapter 1 is now redundant; provide a no-op so the chapter
+% still compiles standalone or in the assembled document.
+\providecommand{\cyr}[1]{#1}
 
 % --- Mathematics ---
 \usepackage{amsmath}
@@ -16,7 +29,8 @@
 \usepackage{graphicx}
 \graphicspath{{figures/}}
 \usepackage{tikz}
-\usetikzlibrary{positioning, calc, fit}
+\usetikzlibrary{positioning, calc, fit, arrows.meta, decorations.pathreplacing, shapes.geometric}
+\usepackage{float}
 
 % --- Bibliography ---
 \usepackage[style=authoryear, backend=biber, natbib=true]{biblatex}
@@ -56,6 +70,13 @@
 \input{07-codebase}
 \input{08-tooling}
 \input{09-results}
+
+% --- Figures ---
+% filtration.tex and persistence-diagram.tex are \input'd from
+% 05-persistent-homology.tex (lines 131, 231).
+% pipeline.tex is ready at figures/pipeline.tex; the chapter-6 agent
+% placed a placeholder figure with \label{fig:pipeline} that should be
+% replaced with \input{figures/pipeline} once the placeholder is removed.
 
 % --- Bibliography ---
 \printbibliography

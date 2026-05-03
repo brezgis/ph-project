@@ -1,2 +1,98 @@
 \chapter{The humanities anchor}
-% TODO: chapter body
+\label{ch:humanities}
+
+Persistent homology gives us a lens, but a lens needs something to look at. The mathematical machinery we develop in later chapters is only as interesting as the phenomena it measures --- and the phenomena in this study come from linguistics and anthropology, not from engineering. We chose three semantic domains (color, emotion, kinship) because each has a mature literature establishing how languages carve the same conceptual space differently. The term lists we feed into mBERT are not assembled by intuition; they are grounded in decades of cross-linguistic fieldwork. This chapter lays out that grounding.
+
+\section{Color}
+\label{sec:color}
+
+The study of color terminology has an unusual advantage: the referential domain is continuous and physically measurable, yet languages slice it into discrete categories at different boundaries. This makes color the cleanest natural experiment in linguistic relativity.
+
+Our anchor is \textcite{berlin1969}. Their central claim is that basic color term systems evolve along a constrained trajectory, from a minimum of two terms (black/white, or more precisely dark/light) to a maximum of eleven at what they call Stage VII: black, white, red, green, yellow, blue, brown, purple, pink, orange, gray. English instantiates this endpoint cleanly. \textcite{kay1999} revised the evolutionary sequence but preserved the eleven-term ceiling.
+
+A term qualifies as ``basic'' under Berlin and Kay's criteria if it is monolexemic (not \emph{dark blue} or \emph{sky blue}), not subordinate to another color term, applicable to any object class, and psychologically salient across speakers. These criteria matter for our study because they predict which terms will have robust, independent distributional signatures in a language model's training data. A basic color term should occupy its own region of attention space; a non-basic compound like \emph{azul celeste} ('sky blue') should cluster with its head.
+
+\subsection{Russian: the blue split}
+\label{sec:russian-blue}
+
+Russian is the theoretically interesting case. Where English has one basic blue term, Russian obligatorily distinguishes синий (sinij, 'dark blue') and голубой (goluboj, 'light blue'). This is not a stylistic or optional distinction --- both terms meet every one of Berlin and Kay's basicness criteria. \textcite{paramei2005} argues that голубой is ``culturally basic'': its salience is reinforced by deep symbolic associations with sky, purity, and idealism that синий does not carry.
+
+The perceptual evidence is decisive. \textcite{winawer2007} showed that Russian speakers discriminate colors faster when they straddle the синий/голубой boundary than when both samples fall within the same category. Crucially, this advantage disappears under verbal interference but persists under spatial interference --- confirming that the boundary is linguistically mediated, not a quirk of low-level vision. \textcite{davidoff1999}, working with the Berinmo of Papua New Guinea, established the general principle that color categorical perception tracks linguistic boundaries; the Russian blue split is the most prominent instance in a major world language.
+
+For our study, Russian gets twelve basic color terms. The синий/голубой split is the primary cross-linguistic contrast we expect persistent homology to detect. If mBERT's attention topology in the blue region differs structurally between Russian and English --- different numbers of connected components, different loop structures in the persistence diagram --- that would be direct evidence that the model has internalized a linguistically-mediated categorical boundary.
+
+\subsection{Spanish: the Castilian baseline}
+\label{sec:spanish-color}
+
+Spanish maps onto the eleven-term Stage VII system without structural deviation. \textcite{lillo2018} document the main complexity, which is dialectal: Castilian uses \emph{marrón} ('brown') where Mexican Spanish uses \emph{café}; Castilian and Mexican Spanish use \emph{morado} ('purple') where Uruguayan Spanish prefers \emph{violeta}. Despite this lexical variation, the underlying color volumes are remarkably stable across dialects.
+
+We canonicalize on Castilian forms because mBERT's Spanish training data (primarily Wikipedia) skews toward European Spanish. Spanish does \emph{not} split the blue region --- \emph{azul celeste} exists as a compound but fails the monolexemic criterion. This makes Spanish a useful control: it patterns with English in the blue domain, so any topological difference between Russian and the other two languages in that region is attributable to the синий/голубой split rather than to general cross-linguistic noise.
+
+\subsection{Term counts: color}
+
+English contributes 11 terms, Russian 12, Spanish 11. The asymmetry is minimal and entirely localized to the blue region.
+
+\section{Emotion}
+\label{sec:emotion}
+
+Emotion is messier than color. There is no physical continuum to anchor the categories, and the question of whether emotions are universal or culturally constructed remains actively contested. We use a mixed-anchor strategy: \textcite{ekman1992} provides the cross-linguistic comparability spine (six basic emotions that appear to have universal facial-expression correlates), while \textcite{wierzbicka1999} supplies the culturally-specific terms that make this study worth doing.
+
+The Ekman basics --- anger, disgust, fear, happiness, sadness, surprise --- appear in all three languages and allow us to ask: do the same categories produce different topological signatures across languages? The Wierzbicka additions allow the harder question: what happens to attention topology when a language lexicalizes an emotion concept that other languages lack entirely?
+
+\subsection{Russian emotion terms}
+\label{sec:russian-emotion}
+
+Wierzbicka's centerpiece is тоска (toska, 'melancholy-cum-yearning'). She defines it as ``how one feels when one wants some things to happen and knows that they cannot happen'' \parencite[Ch.~2]{wierzbicka1999}. It is not sadness, not longing, not nostalgia --- it shares features with all three but collapses none of them. English has no single lexeme for it; the best approximations (``yearning,'' ``melancholy,'' ``anguish'') each miss something. Wierzbicka argues that тоска reflects a Russian cultural script in which passive suffering carries positive value.
+
+The same cultural logic extends to грусть (grust', 'a light, reflective sadness') and печаль (pechal', 'a more literary sorrow'). Where English collapses these into a single ``sadness,'' Russian lexicalizes them as distinct emotional experiences with different valences --- грусть is sometimes positively valued, a contemplative melancholy one might seek out. Persistent homology should reveal this: if the two Russian sadness terms occupy genuinely different regions of attention space, their persistence diagrams will show distinct topological features where English ``sadness'' shows one.
+
+Other Russian-specific inclusions: жалость (zhalost', 'compassionate pity' --- warmer than English ``pity,'' which implies condescension); совесть (sovest', 'conscience-as-felt-emotion' rather than moral faculty, analyzed by \textcite{wierzbicka1992}); and тревога (trevoga, 'existential anxiety,' closer to German \emph{Angst} than English ``worry''). \textcite{pavlenko2005} documents how Russian-English bilinguals report difficulty mapping these concepts across their languages, supporting their status as genuinely distinct categories rather than near-synonyms.
+
+\subsection{Spanish emotion terms}
+\label{sec:spanish-emotion}
+
+The Spanish inventory's distinctive contribution is duende ('a dark, telluric force'). \textcite{garcialorca1933} defines it by contrast: where the Angel gives light and the Muse gives form, duende rises from the earth, tied to awareness of death. \textcite{maurer2004} isolates four elements: irrationality, earthiness, heightened death-awareness, and the diabolical. Duende is not an emotion in the Ekman sense --- it is closer to an aesthetic mode of being, a state that overtakes a performer or a listener. Its inclusion tests whether mBERT encodes something for a culturally-specific affective concept that has no equivalent in the comparison languages.
+
+Other Spanish-specific terms: cariño ('affectionate warmth,' broader than ``love'' --- used for family, friends, romantic partners, even objects); añoranza ('homesickness' lexicalized as a single word, paralleling Russian тоска по родине but as a monomorphemic form); and ilusión ('hopeful excitement,' a false friend with English ``illusion''). The last is a productive test case: \emph{me hace ilusión} means ``I'm excited about it,'' and \textcite{goddard2002} treat it as a Spanish-specific emotion concept within the NSM framework.
+
+\subsection{Term counts: emotion}
+
+English contributes 18 terms, Russian 19, Spanish 22. The larger Spanish count reflects the inclusion of terms like duende, ilusión, and añoranza that lexicalize affective states English leaves to circumlocution. The Ekman-equivalent base is 7 terms per language (the six basics plus contempt); the remainder are culturally-specific or higher-order social emotions included for cross-linguistic contrast.
+
+\section{Kinship}
+\label{sec:kinship}
+
+Kinship is the most structurally constrained of our three domains. All three languages belong to \textcite{murdock1949}'s Eskimo-type system: lineal kin (parents, children) are terminologically separated from collateral kin (aunts, uncles, cousins), and cross-cousins are not distinguished from parallel cousins. We should not expect dramatic topological divergence the way we might for color or emotion. The interest here is in granular lexicalization differences within a shared structural type.
+
+\subsection{Russian: the affinal explosion}
+\label{sec:russian-kinship}
+
+The most striking cross-linguistic difference is in affinal (in-law) terminology. English has one term per structural position: ``father-in-law'' covers both husband's father and wife's father. Spanish is the same --- suegro/suegra are gender-of-spouse neutral. Russian, however, lexicalizes the distinction: свёкор (svjokor, 'husband's father') vs. тесть (test', 'wife's father'); свекровь (svekrov', 'husband's mother') vs. тёща (tjoshcha, 'wife's mother'). The pattern extends to spouse's siblings: деверь (dever', 'husband's brother') vs. шурин (shurin, 'wife's brother'); золовка (zolovka, 'husband's sister') vs. свояченица (svoyachenitsa, 'wife's sister').
+
+\textcite{friedrich1964} traces this system to the patrilocal household structure of pre-industrial Russia, where a bride moved into her husband's family and her relationships to his relatives were socially and practically distinct from a groom's relationships to his wife's family. The terminology has outlived the social structure that motivated it, but it remains in active use. Russian also preserves a perspective-dependent split in ``daughter-in-law'': сноха (snokha, from the father-in-law's perspective) vs. невестка (nevestka, from the mother-in-law's perspective or for brother's wife).
+
+For persistent homology, the prediction is that Russian in-law terms will form a more finely differentiated cluster --- more distinct landmarks in the persistence diagram --- because the language encodes distinctions that English and Spanish collapse into polysemous compounds.
+
+\subsection{Spanish: extended affinal terms}
+\label{sec:spanish-kinship}
+
+Spanish contributes its own lexicalization that English lacks: consuegro/consuegra ('one's child's parent-in-law') and concuñado/concuñada ('spouse of one's spouse's sibling'). These are attested in the RAE dictionary and are not archaic. They represent an extension of the affinal domain into a third degree that English reaches only with circumlocution. Whether mBERT's training data contains enough instances to produce stable attention patterns is an empirical question --- but including them allows us to test it.
+
+Spanish also genders the cousin term (primo/prima, 'male cousin' / 'female cousin'), mirroring Russian's двоюродный брат (dvoyurodnyj brat, 'male cousin') / двоюродная сестра (dvoyurodnaya sestra, 'female cousin') against English's gender-neutral ``cousin.'' The structural move is the same; the morphological strategy differs (separate lexeme in Spanish vs. compositional modifier in Russian).
+
+\subsection{Term counts: kinship}
+
+English contributes 27 terms, Russian 34, Spanish 32. Russian's larger inventory is almost entirely due to the affinal distinctions documented by \textcite{friedrich1964}. English is smallest because it collapses spouse-side and perspective distinctions into polysemous compounds.
+
+\section{Why these three domains together}
+\label{sec:domains-together}
+
+Color, emotion, and kinship are not an arbitrary trio. They represent three different relationships between language and conceptual structure:
+
+\begin{itemize}
+\item \textbf{Color} has a continuous physical referent. Cross-linguistic differences are categorical boundaries imposed on a shared perceptual space. The topology should show sharp discontinuities at boundary locations.
+\item \textbf{Emotion} has no physical referent. Cross-linguistic differences reflect cultural scripts about what counts as a distinct affective state. The topology should show different clustering granularity.
+\item \textbf{Kinship} has a discrete combinatorial referent (biological relationships are fixed). Cross-linguistic differences are purely lexicalization choices within a shared structure. The topology should show different resolution within the same overall shape.
+\end{itemize}
+
+If persistent homology detects differences only in one domain, the explanation is domain-specific. If it detects structurally analogous differences across all three --- more connected components where a language draws finer distinctions, more loops where a language preserves ambiguity --- the explanation is about how mBERT internalizes the granularity of any lexical field, regardless of whether the referent is perceptual, affective, or social. That is the stronger and more interesting hypothesis, and it is what our three-domain design is built to test.
