@@ -46,12 +46,12 @@ hash and prompts you to fill in the table below.
 
 | File | SHA-256 |
 |------|---------|
-| `cc.en.300.bin` | TODO — run `scripts/download_fasttext.sh` to compute |
-| `cc.ru.300.bin` | TODO — run `scripts/download_fasttext.sh` to compute |
-| `cc.es.300.bin` | TODO — run `scripts/download_fasttext.sh` to compute |
-| `wiki.multi.en.vec` | TODO — run `scripts/download_fasttext.sh` to compute |
-| `wiki.multi.ru.vec` | TODO — run `scripts/download_fasttext.sh` to compute |
-| `wiki.multi.es.vec` | TODO — run `scripts/download_fasttext.sh` to compute |
+| `cc.en.300.bin` | 14c7167b130056944cbdc37b7451f055867fe9a4e3fed3bbc1ecc0e74f6763ca |
+| `cc.ru.300.bin` | 208df9419e13196de5b63008880999ebcf8383d083762c9bb0c210f84f280279 |
+| `cc.es.300.bin` | b8c800affac505d60c8a929cb90ff2ef616b4e8b5224d8f3a0a5e911a8a6546e |
+| `wiki.multi.en.vec` | b9558d40469e9ed6cb3963cc85b28a2e3841811a7d6d3b9ce3c54bf7784caacd |
+| `wiki.multi.ru.vec` | 0cd989c36691df2d5ea64e0a59b9629df79e2faa48269ff41c2a2210bc6626eb |
+| `wiki.multi.es.vec` | 96f1c2dd9651b653ebcd1fd720a20bb4195f9c457d9df4757768fc03b758a326 |
 
 **How to populate:** after running `scripts/download_fasttext.sh`, it prints the
 computed hash next to each `*** SHA-256 PLACEHOLDER ***` banner. Copy those

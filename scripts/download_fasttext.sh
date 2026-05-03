@@ -54,12 +54,12 @@ mkdir -p "$CC_DIR" "$ALIGNED_DIR"
 # Populate these after the first run.
 # -----------------------------------------------------------------------
 declare -A EXPECTED_SHA256=(
-    ["cc.en.300.bin"]="TODO"
-    ["cc.ru.300.bin"]="TODO"
-    ["cc.es.300.bin"]="TODO"
-    ["wiki.multi.en.vec"]="TODO"
-    ["wiki.multi.ru.vec"]="TODO"
-    ["wiki.multi.es.vec"]="TODO"
+    ["cc.en.300.bin"]="14c7167b130056944cbdc37b7451f055867fe9a4e3fed3bbc1ecc0e74f6763ca"
+    ["cc.ru.300.bin"]="208df9419e13196de5b63008880999ebcf8383d083762c9bb0c210f84f280279"
+    ["cc.es.300.bin"]="b8c800affac505d60c8a929cb90ff2ef616b4e8b5224d8f3a0a5e911a8a6546e"
+    ["wiki.multi.en.vec"]="b9558d40469e9ed6cb3963cc85b28a2e3841811a7d6d3b9ce3c54bf7784caacd"
+    ["wiki.multi.ru.vec"]="0cd989c36691df2d5ea64e0a59b9629df79e2faa48269ff41c2a2210bc6626eb"
+    ["wiki.multi.es.vec"]="96f1c2dd9651b653ebcd1fd720a20bb4195f9c457d9df4757768fc03b758a326"
 )
 
 # -----------------------------------------------------------------------
