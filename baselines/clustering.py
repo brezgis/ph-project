@@ -6,6 +6,10 @@ Used by Baseline A (language-specific descriptive) and Baseline C
 """
 
 import numpy as np
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 
 def agglomerative_linkage(D: np.ndarray, method: str = "average") -> np.ndarray:
@@ -28,7 +32,10 @@ def agglomerative_linkage(D: np.ndarray, method: str = "average") -> np.ndarray:
         ``[cluster_i, cluster_j, distance, n_observations]``.
         Pass directly to ``scipy.cluster.hierarchy.dendrogram``.
     """
-    raise NotImplementedError
+    # scipy.cluster.hierarchy.linkage accepts a condensed distance matrix
+    # (upper-triangle form produced by squareform).
+    condensed = squareform(D)
+    return linkage(condensed, method=method)
 
 
 def kmeans_silhouette_sweep(X: np.ndarray, k_range: range) -> dict:
@@ -50,5 +57,16 @@ def kmeans_silhouette_sweep(X: np.ndarray, k_range: range) -> dict:
         Mapping ``{k: silhouette_score}`` for each k in *k_range*.
         Silhouette scores are in [-1, 1]; higher is better-separated.
         Uses ``sklearn.metrics.silhouette_score`` with ``metric="cosine"``.
+
+    Notes
+    -----
+    ``random_state=0`` is fixed for reproducibility.  ``n_init=10`` is used
+    unconditionally (safe for sklearn 1.x and 2.x; avoids the ``"warn"``
+    default in sklearn 1.3 that would emit a FutureWarning).
     """
-    raise NotImplementedError
+    scores: dict = {}
+    for k in k_range:
+        km = KMeans(n_clusters=k, n_init=10, random_state=0)
+        labels = km.fit_predict(X)
+        scores[k] = silhouette_score(X, labels, metric="cosine")
+    return scores

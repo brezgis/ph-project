@@ -309,10 +309,96 @@ class TestBoundaryCases:
 
 
 # ------------------------------------------------------------------
-# Placeholder for ssa.4 (cosine_distance_matrix)
+# cosine_distance_matrix  (ssa.4)
 # ------------------------------------------------------------------
 
-@pytest.mark.skip(reason="awaits ssa.4 implementation")
-def test_cosine_distance_matrix_placeholder():
-    """Placeholder — full unit tests land with ssa.4."""
-    pass
+class TestCosineDistanceMatrix:
+    """Unit tests for cosine_distance_matrix."""
+
+    def _small_matrix(self) -> np.ndarray:
+        """Three 4-dim unit vectors with known cosine relationships."""
+        rng = np.random.default_rng(42)
+        X = rng.standard_normal((5, 4)).astype(np.float32)
+        return X
+
+    def test_shape_n_by_n(self):
+        """Output shape is (n, n) for input (n, dim)."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = self._small_matrix()
+        D = cosine_distance_matrix(X)
+        assert D.shape == (X.shape[0], X.shape[0])
+
+    def test_zero_diagonal(self):
+        """Diagonal entries are zero (distance from a vector to itself)."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = self._small_matrix()
+        D = cosine_distance_matrix(X)
+        np.testing.assert_allclose(np.diag(D), 0.0, atol=1e-6)
+
+    def test_symmetry(self):
+        """Distance matrix is symmetric: D == D.T."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = self._small_matrix()
+        D = cosine_distance_matrix(X)
+        np.testing.assert_allclose(D, D.T, atol=1e-6)
+
+    def test_bounded_0_to_2(self):
+        """All values are in [0, 2] (cosine distance range)."""
+        from baselines.distances import cosine_distance_matrix
+
+        # Use an adversarial matrix with negative entries to stress [0, 2]
+        rng = np.random.default_rng(7)
+        X = rng.standard_normal((6, 8)).astype(np.float32)
+        D = cosine_distance_matrix(X)
+        assert np.all(D >= -1e-6), f"Negative values found: min={D.min()}"
+        assert np.all(D <= 2.0 + 1e-6), f"Values > 2 found: max={D.max()}"
+
+    def test_matches_scipy_cosine_on_handpicked_pairs(self):
+        """Values match scipy.spatial.distance.cosine on at least 3 pairs."""
+        from baselines.distances import cosine_distance_matrix
+        from scipy.spatial.distance import cosine as sp_cosine
+
+        # Three handpicked small vectors
+        X = np.array([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],  # 45° from both axis vectors
+        ], dtype=np.float32)
+
+        D = cosine_distance_matrix(X)
+
+        # Pair (0,1): orthogonal → cosine distance = 1.0
+        np.testing.assert_allclose(D[0, 1], sp_cosine(X[0], X[1]), atol=1e-6)
+        # Pair (0,2)
+        np.testing.assert_allclose(D[0, 2], sp_cosine(X[0], X[2]), atol=1e-6)
+        # Pair (1,2)
+        np.testing.assert_allclose(D[1, 2], sp_cosine(X[1], X[2]), atol=1e-6)
+
+        # Verify orthogonal pair explicitly
+        np.testing.assert_allclose(D[0, 1], 1.0, atol=1e-6)
+
+    def test_matches_scipy_cosine_random_vectors(self):
+        """Values match scipy on a random (4, 16) matrix for all pairs."""
+        from baselines.distances import cosine_distance_matrix
+        from scipy.spatial.distance import cosine as sp_cosine
+
+        rng = np.random.default_rng(99)
+        X = rng.standard_normal((4, 16)).astype(np.float32)
+        D = cosine_distance_matrix(X)
+
+        for i in range(X.shape[0]):
+            for j in range(X.shape[0]):
+                expected = sp_cosine(X[i], X[j]) if i != j else 0.0
+                np.testing.assert_allclose(D[i, j], expected, atol=1e-5,
+                    err_msg=f"Mismatch at ({i},{j})")
+
+    def test_opposite_vectors_distance_two(self):
+        """Anti-parallel vectors have cosine distance = 2.0."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = np.array([[1.0, 0.0], [-1.0, 0.0]], dtype=np.float32)
+        D = cosine_distance_matrix(X)
+        np.testing.assert_allclose(D[0, 1], 2.0, atol=1e-6)

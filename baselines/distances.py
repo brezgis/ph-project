@@ -7,6 +7,7 @@ Used by all three sub-baselines (A, B, C) as the shared input layer.
 import logging
 
 import numpy as np
+from scipy.spatial.distance import pdist, squareform
 
 from baselines import SUPPORTED_LANGUAGES
 
@@ -52,7 +53,8 @@ def cosine_distance_matrix(X: np.ndarray) -> np.ndarray:
         Diagonal is zero.  Values are in [0, 2] in principle but in [0, 1] for
         non-negative embedding spaces.
     """
-    raise NotImplementedError
+    condensed = pdist(X, metric="cosine")
+    return squareform(condensed)
 
 
 def _lookup_vector(word: str, kv):
