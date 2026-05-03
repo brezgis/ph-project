@@ -357,28 +357,39 @@ class TestCosineDistanceMatrix:
         assert np.all(D <= 2.0 + 1e-6), f"Values > 2 found: max={D.max()}"
 
     def test_matches_scipy_cosine_on_handpicked_pairs(self):
-        """Values match scipy.spatial.distance.cosine on at least 3 pairs."""
+        """Values match scipy.spatial.distance.cosine on geometrically distinct pairs.
+
+        Three vectors chosen so every off-diagonal pair has a different distance:
+          v0 = [1, 0, 0, 0], v1 = [0, 1, 0, 0]  → orthogonal, distance = 1.0
+          v0 = [1, 0, 0, 0], v2 = [1, 1, 0, 0]  → 45°, distance ≈ 0.293
+          v1 = [0, 1, 0, 0], v3 = [1, 0, 1, 0]  → 90°, distance = 1.0 (same as (0,1))
+
+        To ensure geometric diversity, replace the symmetric (1,2) pair (which gives the
+        same ~0.293 as (0,2)) with a pi/3 pair: [1, 0] vs [0.5, sqrt(3)/2] → distance = 0.5.
+        """
         from baselines.distances import cosine_distance_matrix
         from scipy.spatial.distance import cosine as sp_cosine
 
-        # Three handpicked small vectors
+        # Four vectors: two axis vectors, one 45° blend, one at pi/3 from v0
         X = np.array([
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [1.0, 1.0, 0.0],  # 45° from both axis vectors
-        ], dtype=np.float32)
+            [1.0, 0.0, 0.0, 0.0],           # v0
+            [0.0, 1.0, 0.0, 0.0],           # v1 — orthogonal to v0
+            [1.0, 1.0, 0.0, 0.0],           # v2 — 45° from v0 and v1
+            [0.5, np.sqrt(3) / 2, 0.0, 0.0],  # v3 — pi/3 from v0 (distance = 0.5)
+        ], dtype=np.float64)
 
         D = cosine_distance_matrix(X)
 
-        # Pair (0,1): orthogonal → cosine distance = 1.0
+        # Pair (0,1): orthogonal → distance = 1.0
         np.testing.assert_allclose(D[0, 1], sp_cosine(X[0], X[1]), atol=1e-6)
-        # Pair (0,2)
-        np.testing.assert_allclose(D[0, 2], sp_cosine(X[0], X[2]), atol=1e-6)
-        # Pair (1,2)
-        np.testing.assert_allclose(D[1, 2], sp_cosine(X[1], X[2]), atol=1e-6)
-
-        # Verify orthogonal pair explicitly
         np.testing.assert_allclose(D[0, 1], 1.0, atol=1e-6)
+
+        # Pair (0,2): 45° → distance ≈ 0.293
+        np.testing.assert_allclose(D[0, 2], sp_cosine(X[0], X[2]), atol=1e-6)
+
+        # Pair (0,3): pi/3 → distance = 0.5 (geometrically distinct from (0,2))
+        np.testing.assert_allclose(D[0, 3], sp_cosine(X[0], X[3]), atol=1e-6)
+        np.testing.assert_allclose(D[0, 3], 0.5, atol=1e-6)
 
     def test_matches_scipy_cosine_random_vectors(self):
         """Values match scipy on a random (4, 16) matrix for all pairs."""
@@ -402,3 +413,28 @@ class TestCosineDistanceMatrix:
         X = np.array([[1.0, 0.0], [-1.0, 0.0]], dtype=np.float32)
         D = cosine_distance_matrix(X)
         np.testing.assert_allclose(D[0, 1], 2.0, atol=1e-6)
+
+    def test_empty_input_returns_zero_by_zero(self):
+        """Input shape (0, dim) → output shape (0, 0), not (1, 1)."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = np.empty((0, 8), dtype=np.float32)
+        D = cosine_distance_matrix(X)
+        assert D.shape == (0, 0), f"Expected (0, 0), got {D.shape}"
+
+    def test_single_row_returns_one_by_one_zero(self):
+        """Input shape (1, dim) → output shape (1, 1) of zeros."""
+        from baselines.distances import cosine_distance_matrix
+
+        X = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+        D = cosine_distance_matrix(X)
+        assert D.shape == (1, 1), f"Expected (1, 1), got {D.shape}"
+        np.testing.assert_allclose(D, 0.0, atol=1e-9)
+
+    def test_invalid_ndim_raises_value_error(self):
+        """Non-2D input raises ValueError."""
+        from baselines.distances import cosine_distance_matrix
+
+        with pytest.raises(ValueError):
+            cosine_distance_matrix(np.array([1.0, 0.0, 0.0]))
+

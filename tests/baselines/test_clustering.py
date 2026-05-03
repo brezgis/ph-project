@@ -117,6 +117,42 @@ class TestAgglomerativeLinkage:
             f"Last merge should combine all {n} observations, got {Z[-1, 3]}"
         )
 
+    def test_first_merge_distance_is_within_cluster(self):
+        """First merge is within a tight pair; final merge crosses well-separated clusters.
+
+        Specifically pins the squareform-condense step: skipping it and passing the
+        full square matrix to scipy linkage would inflate within-cluster distances and
+        fail the Z[0, 2] < 0.01 assertion.
+        """
+        from baselines.clustering import agglomerative_linkage
+
+        X = np.array([
+            [1.0, 0.0, 0.0], [1.0, 0.01, 0.0],   # tight pair A
+            [0.0, 1.0, 0.0], [0.0, 1.0, 0.01],    # tight pair B
+        ], dtype=np.float64)
+        D = _distance_matrix_from_X(X)
+        Z = agglomerative_linkage(D, method="average")
+        assert Z[0, 2] < 0.01, (
+            f"First merge should be within a tight pair (< 0.01), got {Z[0, 2]}"
+        )
+        assert Z[-1, 2] > 0.5, (
+            f"Final merge should cross the two clusters (> 0.5), got {Z[-1, 2]}"
+        )
+
+    def test_raises_on_fewer_than_two_observations(self):
+        """agglomerative_linkage raises ValueError for n < 2 distance matrices."""
+        from baselines.clustering import agglomerative_linkage
+
+        # n=0
+        D_empty = np.zeros((0, 0), dtype=float)
+        with pytest.raises(ValueError):
+            agglomerative_linkage(D_empty)
+
+        # n=1
+        D_single = np.zeros((1, 1), dtype=float)
+        with pytest.raises(ValueError):
+            agglomerative_linkage(D_single)
+
 
 # ---------------------------------------------------------------------------
 # kmeans_silhouette_sweep
@@ -172,13 +208,42 @@ class TestKmeansSilhouetteSweep:
         assert set(scores.keys()) == {2}
 
     def test_reproducible_with_fixed_random_state(self):
-        """Two identical calls return identical scores (fixed random_state=0)."""
+        """kmeans_silhouette_sweep calls KMeans with random_state=0.
+
+        Uses unittest.mock.patch to verify the contract directly, independent
+        of whether the fixture is numerically ambiguous.
+        """
+        from unittest.mock import patch, MagicMock
         from baselines.clustering import kmeans_silhouette_sweep
 
         X = _two_cluster_data()
-        scores_a = kmeans_silhouette_sweep(X, k_range=range(2, 5))
-        scores_b = kmeans_silhouette_sweep(X, k_range=range(2, 5))
-        for k in range(2, 5):
-            assert scores_a[k] == scores_b[k], (
-                f"Non-reproducible score at k={k}: {scores_a[k]} vs {scores_b[k]}"
+
+        captured_kwargs = []
+
+        def _capturing_init(self_obj, **kwargs):
+            captured_kwargs.append(kwargs)
+            # Delegate to real KMeans so the rest of the call chain works.
+            from sklearn.cluster import KMeans as _RealKMeans
+            real_instance = _RealKMeans.__new__(_RealKMeans)
+            _RealKMeans.__init__(real_instance, **kwargs)
+            self_obj.__dict__.update(real_instance.__dict__)
+            self_obj._real = real_instance
+
+        with patch("baselines.clustering.KMeans") as MockKMeans:
+            # Make the mock behave like a real KMeans by forwarding calls.
+            from sklearn.cluster import KMeans as _RealKMeans
+
+            def _side_effect(**kwargs):
+                return _RealKMeans(**kwargs)
+
+            MockKMeans.side_effect = _side_effect
+            kmeans_silhouette_sweep(X, k_range=range(2, 4))
+
+        assert len(MockKMeans.call_args_list) == 2, (
+            "Expected one KMeans call per k value"
+        )
+        for call in MockKMeans.call_args_list:
+            _, kw = call
+            assert kw.get("random_state") == 0, (
+                f"KMeans must be called with random_state=0, got {kw!r}"
             )

@@ -32,6 +32,11 @@ def agglomerative_linkage(D: np.ndarray, method: str = "average") -> np.ndarray:
         ``[cluster_i, cluster_j, distance, n_observations]``.
         Pass directly to ``scipy.cluster.hierarchy.dendrogram``.
     """
+    n = D.shape[0]
+    if n < 2:
+        raise ValueError(
+            f"agglomerative_linkage requires at least 2 observations; got n={n}"
+        )
     # scipy.cluster.hierarchy.linkage accepts a condensed distance matrix
     # (upper-triangle form produced by squareform).
     condensed = squareform(D)
