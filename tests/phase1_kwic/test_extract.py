@@ -335,10 +335,15 @@ class TestSampling:
         )
 
     def test_sha256_subseed_used(self, corpus_file, color_terms):
-        """Sampling is based on SHA-256 subseed, not builtin hash().
+        """Sampling is based on SHA-256 subseed, not plain random.Random(seed).
 
-        Verify by replicating the expected subseed computation externally
-        and confirming the same sample is drawn.
+        Replicates the full SHA-256 → subseed → random.Random → sample chain
+        externally against the known synthetic corpus and asserts that the
+        emitted KWIC sentences match that external replication exactly.
+
+        Mutation test: if the implementation is changed to use
+        ``random.Random(seed)`` instead of the SHA-256-derived subseed, this
+        test FAILS because the two RNGs diverge immediately.
         """
         seed = 7
         n_samples = 10
@@ -348,15 +353,40 @@ class TestSampling:
         red_rows = df[df["term"] == "red"]
         assert len(red_rows) == n_samples
 
-        # Externally replicate the expected subseed
+        # Reconstruct the exact deduped candidate list the pipeline sees.
+        # The corpus has 20 unique "red" sentences; each KWIC string is:
+        #   "tok_a_i tok_b_i tok_c_i red suf_0_i ... suf_7_i"
+        # with window=10 (default in _run), so the window covers the full
+        # sentence (max 12 tokens < 21 tokens window).
+        # Build them in corpus order (same as pipeline).
+        extra_tokens = 8  # matches _build_corpus_lines default
+        window = 10       # matches _run default
+        deduped_candidates: list[tuple[str, int]] = []
+        for i in range(20):  # 20 red sentences in corpus order
+            prefix = f"tok_a_{i} tok_b_{i} tok_c_{i}"
+            suffix = " ".join(f"suf_{j}_{i}" for j in range(extra_tokens))
+            sentence = f"{prefix} red {suffix}"
+            ws_tokens = sentence.split()
+            ws_idx = 3  # "red" is at position 3
+            left = max(0, ws_idx - window)
+            right = min(len(ws_tokens), ws_idx + window + 1)
+            kwic_str = " ".join(ws_tokens[left:right])
+            target_idx = ws_idx - left
+            deduped_candidates.append((kwic_str, target_idx))
+
+        # Replicate the SHA-256 subseed derivation
         digest = hashlib.sha256(f"{seed}|{term_surface}".encode("utf-8")).digest()
-        expected_subseed = int.from_bytes(digest[:8], "big")
-        # We can't directly inspect which sentences were chosen without
-        # running the full pipeline, so we at least verify the row count
-        # and that running again with same seed gives the same rows.
-        df2, _ = _run(corpus_file, color_terms, seed=seed, n_samples=n_samples)
-        red2 = df2[df2["term"] == "red"]
-        assert list(red_rows["sentence"]) == list(red2["sentence"])
+        subseed = int.from_bytes(digest[:8], "big")
+        rng = random.Random(subseed)
+        expected_sample = rng.sample(deduped_candidates, n_samples)
+        expected_sentences = [kwic for kwic, _ in expected_sample]
+
+        actual_sentences = list(red_rows["sentence"])
+        assert actual_sentences == expected_sentences, (
+            "Emitted KWIC sentences do not match the external SHA-256 replication. "
+            "If the impl uses random.Random(seed) instead of the SHA-256-derived "
+            "subseed, the samples will diverge."
+        )
 
 
 class TestMinPostTargetFilter:
@@ -732,3 +762,253 @@ class TestCorpusSourceConstants:
         p = default_corpus_path("en")
         assert p.name == "eng_news_2020_1M-sentences.txt"
         assert p.parent.name == "en"
+
+
+# ---------------------------------------------------------------------------
+# New tests: items 2, 3, 5, 6, 7 from review findings
+# ---------------------------------------------------------------------------
+
+
+class TestPerTermSubseedIndependence:
+    """Each term gets its own subseed derived from its surface form.
+
+    Two different terms with the same global seed must produce different
+    samples, proving the term surface is mixed into the subseed rather than
+    sharing global RNG state.
+    """
+
+    def test_different_terms_get_different_samples(self, tmp_path):
+        """Two over-target terms with the same seed produce different sample sets."""
+        # Build a corpus where both "red" and "blue" appear 20 times each.
+        lines: list[str] = []
+        for i in range(20):
+            lines.append(
+                f"{i+1}\ttok_a_{i} tok_b_{i} tok_c_{i} red suf_0_{i} suf_1_{i} suf_2_{i} suf_3_{i} suf_4_{i} suf_5_{i}"
+            )
+        for i in range(20):
+            lines.append(
+                f"{21+i}\ttok_a_{i} tok_b_{i} tok_c_{i} blue suf_0_{i} suf_1_{i} suf_2_{i} suf_3_{i} suf_4_{i} suf_5_{i}"
+            )
+        corpus = tmp_path / "two-term-corpus.txt"
+        corpus.write_text("\n".join(lines), encoding="utf-8")
+
+        terms = [
+            _make_term("red",  ("red",)),
+            _make_term("blue", ("blue",)),
+        ]
+        n_samples = 10
+        df, _ = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_path=corpus,
+            corpus_source_id="test_corpus",
+            n_samples=n_samples,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+
+        red_rows = df[df["term"] == "red"]
+        blue_rows = df[df["term"] == "blue"]
+        assert len(red_rows) == n_samples
+        assert len(blue_rows) == n_samples
+
+        # The kwic_str for "red" and "blue" sentences have the same structure
+        # (same prefix/suffix tokens), differing only in the target word.
+        # If both terms used the same global RNG, sampling index order would
+        # be identical, and stripping the target word would yield the same
+        # context prefixes/suffixes. With independent subseeds they must differ.
+        red_indices = [
+            int(s.split()[0].split("_")[-1])  # extract i from "tok_a_i"
+            for s in red_rows["sentence"]
+        ]
+        blue_indices = [
+            int(s.split()[0].split("_")[-1])
+            for s in blue_rows["sentence"]
+        ]
+        assert red_indices != blue_indices, (
+            "Red and blue samples have the same index order, suggesting they "
+            "share a global RNG rather than per-term subseeds."
+        )
+
+
+class TestLeftWindowClip:
+    """target_idx == 0 is valid when target is at the start of a sentence.
+
+    The synthetic corpus always plants the target at ws-index 3, so the
+    left-clip path (max(0, ws_idx - window)) is never exercised non-trivially
+    in other tests.  This test constructs a sentence where the target IS the
+    first token (ws_idx = 0) and asserts target_idx == 0 in the emitted row.
+    """
+
+    def test_target_at_index_zero(self, tmp_path):
+        """A sentence starting with the target word emits target_idx == 0."""
+        # "red" at ws-index 0; 8 tokens follow (satisfies min_post_target=5)
+        sentences = [
+            "1\tred suf0 suf1 suf2 suf3 suf4 suf5 suf6 suf7",
+        ]
+        corpus = tmp_path / "leftclip-corpus.txt"
+        corpus.write_text("\n".join(sentences), encoding="utf-8")
+
+        terms = [_make_term("red", ("red",))]
+        df, _ = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_path=corpus,
+            corpus_source_id="test_corpus",
+            n_samples=200,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+
+        assert len(df) == 1, f"Expected 1 row, got {len(df)}"
+        row = df.iloc[0]
+        assert row["target_idx"] == 0, (
+            f"Expected target_idx=0 for sentence-initial target, got {row['target_idx']}"
+        )
+        # And the token at index 0 must be the target
+        assert row["sentence"].split()[0].lower() == "red"
+
+
+class TestEmptyCorpusColumnSchema:
+    """Empty corpus file must return a DataFrame with the correct column schema."""
+
+    def test_empty_corpus_file_has_correct_columns(self, tmp_path):
+        """Empty file returns empty DataFrame with full column schema."""
+        corpus = tmp_path / "empty.txt"
+        corpus.write_text("", encoding="utf-8")
+
+        terms = [_make_term("red", ("red",))]
+        df, _ = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_path=corpus,
+            corpus_source_id="test_corpus",
+            n_samples=200,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+        assert len(df) == 0
+        expected_cols = ["term", "labels", "sentence", "target_idx", "corpus_source"]
+        assert list(df.columns) == expected_cols, (
+            f"Empty DataFrame has wrong columns: {list(df.columns)}"
+        )
+        assert pd.api.types.is_integer_dtype(df["target_idx"]), (
+            f"target_idx must be integer dtype on empty DataFrame, got {df['target_idx'].dtype}"
+        )
+
+
+class TestReportWindowNonDefault:
+    """Report window.left/right reflect the actual window argument, not just the default."""
+
+    def test_report_window_reflects_non_default_value(self, corpus_file, color_terms):
+        """Calling with window=5 must emit window.left=5 and window.right=5."""
+        _, report = _run(corpus_file, color_terms, window=5)
+        w = report["window"]
+        assert w["left"] == 5, f"Expected window.left=5, got {w['left']}"
+        assert w["right"] == 5, f"Expected window.right=5, got {w['right']}"
+        assert w["unit"] == "whitespace_tokens"
+
+
+class TestReportMatchersField:
+    """report['matchers'] must be a non-empty dict."""
+
+    def test_matchers_is_dict_with_entries(self, corpus_file, color_terms):
+        """report['matchers'] is a dict and has at least one non-empty entry."""
+        _, report = _run(corpus_file, color_terms)
+        matchers = report["matchers"]
+        assert isinstance(matchers, dict), (
+            f"report['matchers'] must be a dict, got {type(matchers)}"
+        )
+        assert len(matchers) >= 1, "report['matchers'] must have at least one entry"
+        # All values must be non-empty strings
+        for lang, ver in matchers.items():
+            assert isinstance(ver, str) and ver, (
+                f"matchers[{lang!r}] is empty or not a string: {ver!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Item 4: CLI happy-path test for scripts/extract_kwic.main()
+# ---------------------------------------------------------------------------
+
+
+class TestExtractKwicCLI:
+    """Happy-path test for scripts/extract_kwic.main().
+
+    Uses _matcher_override and _terms_override via a thin wrapper so the
+    test does not load spaCy or pymorphy3.  The CLI is invoked via the
+    main() function directly (not subprocess), using _matcher_override and
+    _terms_override injected via monkeypatch on extract_kwic.
+    """
+
+    def test_main_writes_csv_and_report(self, tmp_path, monkeypatch):
+        """main() writes <lang>/<domain>.csv and <lang>/<domain>.report.json."""
+        import sys
+
+        # Build a tiny synthetic corpus in tmp_path
+        lines = [
+            f"{i+1}\ttok_a tok_b tok_c red suf_0 suf_1 suf_2 suf_3 suf_4 suf_5"
+            for i in range(5)
+        ]
+        corpus_path = tmp_path / "test-sentences.txt"
+        corpus_path.write_text("\n".join(lines), encoding="utf-8")
+
+        output_dir = tmp_path / "kwic_out"
+
+        # Monkeypatch extract_kwic inside scripts.extract_kwic so that the
+        # CLI's call goes through our stub.  We wrap the real function to
+        # inject _matcher_override and _terms_override without changing the
+        # CLI code.
+        import scripts.extract_kwic as cli_module
+        import phase1_kwic.extract as ext_module
+
+        original_extract = ext_module.extract_kwic
+        terms_stub = [_make_term("red", ("red",))]
+        matcher_stub = StubMatcher()
+
+        def patched_extract_kwic(*args, **kwargs):
+            kwargs["_matcher_override"] = matcher_stub
+            kwargs["_terms_override"] = terms_stub
+            return original_extract(*args, **kwargs)
+
+        monkeypatch.setattr(cli_module, "extract_kwic", patched_extract_kwic)
+
+        cli_module.main([
+            "--lang", "en",
+            "--domain", "color",
+            "--corpus-path", str(corpus_path),
+            "--corpus-source-id", "test_corpus_1M",
+            "--n-samples", "10",
+            "--seed", "0",
+            "--output-dir", str(output_dir),
+        ])
+
+        # Assert output files exist at schema-mandated paths
+        csv_path = output_dir / "en" / "color.csv"
+        report_path = output_dir / "en" / "color.report.json"
+        assert csv_path.exists(), f"CSV not written: {csv_path}"
+        assert report_path.exists(), f"Report not written: {report_path}"
+
+        # Assert CSV has the correct column order
+        import csv
+        with csv_path.open(encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+        expected_cols = ["term", "labels", "sentence", "target_idx", "corpus_source"]
+        assert header == expected_cols, f"CSV header mismatch: {header}"
+
+        # Assert report is valid JSON with required top-level fields
+        import json as _json
+        with report_path.open(encoding="utf-8") as f:
+            report = _json.load(f)
+        for field in ("language", "domain", "corpus_source", "terms", "matchers"):
+            assert field in report, f"Report missing field: {field!r}"

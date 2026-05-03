@@ -57,8 +57,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from phase1_kwic.canon import Term, load_canon
-from phase1_kwic.matchers import HEAD_POSITION, get_matcher
+from phase1_kwic.canon import Term, load_canon, _lemmatize_ws_token
+from phase1_kwic.matchers import HEAD_POSITION, _SPACY_MODEL, get_matcher
 
 if TYPE_CHECKING:
     from phase1_kwic.matchers import Matcher
@@ -95,50 +95,16 @@ def _matcher_versions() -> dict[str, str]:
     try:
         import pymorphy3
         versions["ru"] = f"pymorphy3=={pymorphy3.__version__}"
-    except Exception:
+    except (AttributeError, ImportError):
         versions["ru"] = "pymorphy3"
     try:
         import spacy
-        versions["en"] = f"spacy:en_core_web_md"
-        versions["es"] = f"spacy:es_core_news_md"
-    except Exception:
-        versions["en"] = "spacy:en_core_web_md"
-        versions["es"] = "spacy:es_core_news_md"
+        for lang, model in _SPACY_MODEL.items():
+            versions[lang] = f"spacy:{model}"
+    except (AttributeError, ImportError):
+        for lang, model in _SPACY_MODEL.items():
+            versions[lang] = f"spacy:{model}"
     return versions
-
-
-# ---------------------------------------------------------------------------
-# Per-whitespace-token lemmatization helper
-# ---------------------------------------------------------------------------
-
-def _lemmatize_ws_token(ws_token: str, matcher: "Matcher") -> str:
-    """Return the canonical lemma for a single whitespace token.
-
-    Calls matcher.lemmatize(ws_token) and extracts the first alphabetic lemma.
-    This mirrors load_canon's per-whitespace-token strategy so that the lemmas
-    returned here are comparable to Term.lemmas.
-
-    Parameters
-    ----------
-    ws_token : str
-        A single whitespace-split token from a Leipzig sentence.
-    matcher : Matcher
-        The language matcher (PymorphyMatcher or SpacyMatcher).
-
-    Returns
-    -------
-    str
-        The lemma for the token (lowercased where relevant).
-    """
-    pairs = matcher.lemmatize(ws_token)
-    if not pairs:
-        return ws_token.lower()
-    # Prefer the first non-punctuation / alphabetic lemma
-    lemma = next(
-        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
-        pairs[0][1],
-    )
-    return lemma
 
 
 # ---------------------------------------------------------------------------
@@ -212,18 +178,15 @@ def extract_kwic(
     # ------------------------------------------------------------------
     head_pos = HEAD_POSITION.get(lang, "right")  # default right-headed
 
-    # head_lemma → list of term indices in `terms`
-    head_lemma_to_term_idxs: dict[str, list[int]] = defaultdict(list)
+    # head_lemma → list of (term_index, head_offset) pairs in `terms`
+    head_lemma_to_term_idxs: dict[str, list[tuple[int, int]]] = defaultdict(list)
     for term_idx, term in enumerate(terms):
         if not term.lemmas:
             continue
         n = len(term.lemmas)
-        if head_pos == "right":
-            head_offset = n - 1
-        else:  # left-headed
-            head_offset = 0
+        head_offset = n - 1 if head_pos == "right" else 0
         head_lemma = term.lemmas[head_offset]
-        head_lemma_to_term_idxs[head_lemma].append(term_idx)
+        head_lemma_to_term_idxs[head_lemma].append((term_idx, head_offset))
 
     # ------------------------------------------------------------------
     # 3. Per-term hit accumulator: term_idx → list of (kwic_str, head_ws_idx)
@@ -251,14 +214,12 @@ def extract_kwic(
             sentence = parts[1]
 
             # Apply the same empty/whitespace-only filter from prepare_csv.py:36-47
-            if not isinstance(sentence, str) or not sentence.strip():
+            if not sentence.strip():
                 continue
 
             corpus_total_sentences += 1
 
             ws_tokens = sentence.split()
-            if not ws_tokens:
-                continue
 
             # Lemmatize each whitespace token
             ws_lemmas: list[str] = [
@@ -271,14 +232,9 @@ def extract_kwic(
                     continue
 
                 # One or more terms have this head lemma
-                for term_idx in head_lemma_to_term_idxs[lemma]:
+                for term_idx, head_offset in head_lemma_to_term_idxs[lemma]:
                     term = terms[term_idx]
                     n_tok = len(term.lemmas)
-
-                    if head_pos == "right":
-                        head_offset = n_tok - 1
-                    else:
-                        head_offset = 0
 
                     # Compute start position of the full multi-word term
                     term_start = ws_idx - head_offset
