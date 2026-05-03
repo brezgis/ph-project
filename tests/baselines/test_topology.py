@@ -91,6 +91,9 @@ def test_rips_barcode_two_cluster_sanity():
     # After stripping inf, must still have ≥1 finite bar (the inter-cluster one)
     assert len(h0) >= 1, "Expected at least 1 finite H0 bar for two-cluster data"
 
+    # All deaths must be finite — rips_barcode must strip the infinite H0 bar
+    assert np.all(np.isfinite(h0["death"])), "rips_barcode must strip the infinite H0 bar"
+
     # At least one bar should have death > 0.5 (the wide inter-cluster cosine gap)
     inter_cluster_bars = h0[h0["death"] > 0.5]
     assert len(inter_cluster_bars) >= 1, (
@@ -138,9 +141,9 @@ class TestRipsBarcodeInputValidation:
             rips_barcode(D)
 
     def test_non_2d_raises(self):
-        """1-D input raises ValueError."""
+        """1-D input raises ValueError mentioning ndim or 2-D."""
         D = np.array([0.0, 0.5, 0.3])
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"2-D|ndim"):
             rips_barcode(D)
 
 
@@ -300,4 +303,88 @@ def test_rips_barcode_all_zero_degenerate():
     # H1 must also be empty
     assert h1.shape == (0,), (
         f"H1 should be empty for all-zero D; got shape {h1.shape}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 6: v_is_std — barcode_features h{d}_v computes std, not variance
+# ---------------------------------------------------------------------------
+
+
+def test_barcode_features_v_is_std():
+    """h0_v must equal std (not variance) of bar lengths.
+
+    Uses a barcode with NON-uniform H0 bar lengths [0.1, 0.2, 0.5] so that
+    std != var != 0.0.  If h0_v were returning variance this test would fail.
+    """
+    # Build a synthetic H0 barcode with 3 bars of known lengths: 0.1, 0.2, 0.5
+    # births all zero, deaths = lengths
+    lengths = np.array([0.1, 0.2, 0.5])
+    h0_plain = np.column_stack([np.zeros(3), lengths])  # (3,2) birth/death
+    h0_sa = _to_structured(h0_plain)
+    barcode = {0: h0_sa, 1: np.empty(0, dtype=_STRUCTURED_DTYPE)}
+
+    features = barcode_features(barcode)
+    h0_v = features["h0_v"]
+
+    expected_std = np.std(lengths)
+    expected_var = np.var(lengths)
+
+    # Must equal std
+    assert h0_v == pytest.approx(expected_std, abs=1e-6), (
+        f"h0_v expected std={expected_std:.8f}, got {h0_v:.8f}"
+    )
+    # Must NOT equal var (they differ for non-uniform lengths)
+    assert h0_v != pytest.approx(expected_var, abs=1e-3), (
+        f"h0_v == variance {expected_var:.8f}; regression: v silently returns variance"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 7: key_order_stable — empty and non-empty barcodes have identical key order
+# ---------------------------------------------------------------------------
+
+# Documented grouped H1 key order (n_d_m group before n_b_l group)
+_EXPECTED_H1_KEY_ORDER = [
+    "h1_n_d_m_t0.25",
+    "h1_n_d_m_t0.5",
+    "h1_n_d_m_t0.75",
+    "h1_n_b_l_t0.25",
+    "h1_n_b_l_t0.5",
+    "h1_n_b_l_t0.75",
+]
+
+
+def test_barcode_features_key_order_stable():
+    """Key order from barcode_features must be identical for empty and non-empty barcodes.
+
+    Also asserts that H1 threshold keys are in the documented grouped form
+    (all n_d_m thresholds first, then all n_b_l thresholds).
+    """
+    empty_bc = _empty_barcode()
+
+    # Non-empty barcode: single H0 bar and single H1 bar
+    h0_plain = np.array([[0.0, 0.3]])
+    h1_plain = np.array([[0.1, 0.6]])
+    nonempty_bc = {
+        0: _to_structured(h0_plain),
+        1: _to_structured(h1_plain),
+    }
+
+    empty_keys = list(barcode_features(empty_bc).keys())
+    nonempty_keys = list(barcode_features(nonempty_bc).keys())
+
+    assert empty_keys == nonempty_keys, (
+        "barcode_features must produce identical key ordering for empty and non-empty barcodes.\n"
+        f"Empty keys:    {empty_keys}\n"
+        f"Non-empty keys:{nonempty_keys}"
+    )
+
+    # Verify that the H1 threshold sub-sequence matches the documented grouped order
+    h1_threshold_keys = [k for k in nonempty_keys if k.startswith("h1_n_")]
+    assert h1_threshold_keys == _EXPECTED_H1_KEY_ORDER, (
+        f"H1 threshold keys must be in grouped order "
+        f"(all n_d_m first, then n_b_l).\n"
+        f"Expected: {_EXPECTED_H1_KEY_ORDER}\n"
+        f"Got:      {h1_threshold_keys}"
     )

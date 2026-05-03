@@ -42,7 +42,7 @@ template is::
     h{d}_t_d, h{d}_t_b
 
 for ``d ∈ {0, 1}`` and thresholds ``t`` chosen in ssa.5 (the reference
-notebook uses several, e.g. ``0.25``, ``0.5``, ``0.75``, ``0.95``).
+notebook uses several, e.g. ``0.25``, ``0.5``, ``0.75``).
 """
 
 import numpy as np
@@ -218,12 +218,15 @@ def barcode_features(barcode: dict) -> dict:
 
         if len(bc) == 0:
             # Empty dimension: all features are 0.0
+            # Two separate loops to match the grouped insertion order of the
+            # non-empty branch (all n_d_m thresholds, then all n_b_l thresholds).
             features[f"{prefix}_s"] = 0.0
             features[f"{prefix}_m"] = 0.0
             features[f"{prefix}_v"] = 0.0
             features[f"{prefix}_e"] = 0.0
             for t in _THRESHOLDS:
                 features[f"{prefix}_n_d_m_t{t}"] = 0.0
+            for t in _THRESHOLDS:
                 features[f"{prefix}_n_b_l_t{t}"] = 0.0
             features[f"{prefix}_t_b"] = 0.0
             features[f"{prefix}_t_d"] = 0.0
@@ -249,7 +252,7 @@ def barcode_features(barcode: dict) -> dict:
             # Guard against log(0) — should not occur if L>0 and lengths>=0,
             # but be safe.
             p = p[p > 0]
-            features[f"{prefix}_e"] = float(-np.sum(p * np.log(p)))
+            features[f"{prefix}_e"] = max(0.0, float(-np.sum(p * np.log(p))))
 
         # n_d_m_t<T>: count of bars with death >= T
         for t in _THRESHOLDS:
