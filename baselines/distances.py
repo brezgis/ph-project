@@ -8,6 +8,8 @@ import logging
 
 import numpy as np
 
+from baselines import SUPPORTED_LANGUAGES
+
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,11 @@ HEAD_POSITION: dict[str, str] = {
     "ru": "right",
     "es": "left",
 }
+
+assert HEAD_POSITION.keys() == set(SUPPORTED_LANGUAGES), (
+    f"HEAD_POSITION keys {sorted(HEAD_POSITION)!r} must equal "
+    f"SUPPORTED_LANGUAGES {sorted(SUPPORTED_LANGUAGES)!r}"
+)
 
 
 def cosine_distance_matrix(X: np.ndarray) -> np.ndarray:
