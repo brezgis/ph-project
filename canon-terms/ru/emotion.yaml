@@ -95,10 +95,6 @@ terms:
   - term: ревность
     gloss: "jealousy"
     source: "Wierzbicka 1999"
-  - term: тоскa по родине
-    gloss: "homesickness"
-    source: "Wierzbicka 1999"
-    notes: "Multi-word; head word тоска. Included to parallel Spanish añoranza. The construction тоска по + dative is productive."
 deviations:
   - item: "Both грусть and печаль included for 'sadness'"
     from: "Ekman's model has a single sadness category"
@@ -106,6 +102,3 @@ deviations:
   - item: "совесть included as emotion"
     from: "English categorizes conscience as a moral faculty, not an emotion"
     reason: "Wierzbicka (1992) demonstrates that совесть functions as a felt emotional state in Russian discourse, not merely a cognitive judgment."
-  - item: "тоска по родине as multi-word term"
-    from: "Schema prefers single lexemes"
-    reason: "тоска alone is already listed; this construction parallels Spanish añoranza and is needed for the homesickness comparison."
