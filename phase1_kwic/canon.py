@@ -55,20 +55,53 @@ if TYPE_CHECKING:
     from phase1_kwic.matchers import Matcher
 
 
+def _pick_lemma(ws_token: str, pairs: list[tuple[str, str]]) -> str:
+    """Pick the canonical lemma from a list of (surface, lemma) pairs.
+
+    This is the single source of truth for the lemma-selection rule:
+
+    1. If *pairs* is empty, return ``ws_token.lower()``.
+    2. Otherwise prefer the first pair whose lemma contains at least one
+       alphabetic character (skips punctuation-only sub-tokens like ``","``).
+    3. Fall back to ``pairs[0][1]`` if no alphabetic lemma is found.
+
+    Both :func:`_lemmatize_ws_token` (canon-term loading) and
+    :meth:`SpacyMatcher.lemmatize_many <phase1_kwic.matchers.SpacyMatcher>`
+    (batched corpus lemmatization) delegate to this helper so that the
+    lemma-selection rule is defined in exactly one place.
+
+    Parameters
+    ----------
+    ws_token : str
+        The original whitespace-split token.  Used only as a fallback when
+        *pairs* is empty.
+    pairs : list[tuple[str, str]]
+        ``(surface_token, lemma)`` pairs produced by the matcher for
+        *ws_token* (or for the spaCy sub-tokens that overlap it).
+
+    Returns
+    -------
+    str
+        The selected canonical lemma.
+    """
+    if not pairs:
+        return ws_token.lower()
+    return next(
+        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
+        pairs[0][1],
+    )
+
+
 def _lemmatize_ws_token(ws_token: str, matcher: "Matcher") -> str:
     """Return the canonical lemma for a single whitespace token.
 
-    Calls ``matcher.lemmatize(ws_token)`` and extracts the first alphabetic
-    lemma from the result list.  Falls back to ``ws_token.lower()`` when the
-    result list is empty (e.g. empty-string token, which shouldn't occur in
-    practice) or when no alphabetic lemma is found (e.g. punctuation-only
-    token), in which case the first pair's lemma is used instead.
+    Calls ``matcher.lemmatize(ws_token)`` and delegates pair selection to
+    :func:`_pick_lemma`.
 
-    This is the single source of truth for "lemmatize one whitespace token,
-    prefer first alphabetic lemma, fall back to ws_token.lower()".  Both
-    ``load_canon`` (when computing ``Term.lemmas``) and the extraction
-    pipeline (when scanning corpus sentences) call this helper so that the
-    lemma space is consistent across both call sites.
+    This is the call-site for canon-term loading (``load_canon``) and for
+    any code that needs to lemmatize one token at a time.  For batched corpus
+    processing use ``matcher.lemmatize_many``, which also uses
+    :func:`_pick_lemma` internally.
 
     Parameters
     ----------
@@ -83,13 +116,7 @@ def _lemmatize_ws_token(ws_token: str, matcher: "Matcher") -> str:
         The canonical lemma for *ws_token*.
     """
     pairs = matcher.lemmatize(ws_token)
-    if not pairs:
-        return ws_token.lower()
-    lemma = next(
-        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
-        pairs[0][1],
-    )
-    return lemma
+    return _pick_lemma(ws_token, pairs)
 
 # Root of the repo — two levels up from this file (phase1_kwic/canon.py)
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
