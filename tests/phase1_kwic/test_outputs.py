@@ -61,21 +61,6 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _CANON_DIR = REPO_ROOT / "canon-terms"
 
 # ---------------------------------------------------------------------------
-# StubMatcher for load_canon calls in assertions — avoids spaCy/pymorphy3 load
-# ---------------------------------------------------------------------------
-
-class _StubMatcher:
-    """Lowercases each whitespace token; sufficient for surface-set loading."""
-
-    def lemmatize(self, sentence: str) -> list[tuple[str, str]]:
-        return [(tok, tok.lower()) for tok in sentence.split()]
-
-    def lemmatize_many(self, sentences):
-        for sentence in sentences:
-            yield self.lemmatize(sentence)
-
-
-# ---------------------------------------------------------------------------
 # Helper: load canon surfaces directly from YAML
 # (faster than load_canon when we only need the surface set)
 # ---------------------------------------------------------------------------
@@ -243,6 +228,8 @@ class TestSyntheticViolating:
         "wrong_corpus_source":       r"rule\(f\)",
         "ru_no_cyrillic":            r"rule\(g/ru\)",
         "count_mismatch":            r"rule\(h\)",
+        "es_no_accent":              r"rule\(g/es\)",
+        "en_too_much_non_ascii":     r"rule\(g/en\)",
     }
 
     def test_violation_raises_correct_rule(self, schema_violating, request):

@@ -47,7 +47,7 @@ _COMPLIANT_ROWS = [
     # (term, labels, sentence, target_idx, corpus_source)
     (_TERM_A, _TERM_A, "the quick brown red fox trotted away", 3, _CORPUS_SOURCE),
     (_TERM_A, _TERM_A, "a big bright red balloon floated up", 3, _CORPUS_SOURCE),
-    (_TERM_A, _TERM_A, "she wore a red dress to school", 4, _CORPUS_SOURCE),
+    (_TERM_A, _TERM_A, "she wore a red dress to school", 3, _CORPUS_SOURCE),
     (_TERM_B, _TERM_B, "the blue sky stretched endlessly above", 1, _CORPUS_SOURCE),
     (_TERM_B, _TERM_B, "a deep blue ocean surrounded the island", 2, _CORPUS_SOURCE),
 ]
@@ -278,13 +278,110 @@ def _violation_ru_no_cyrillic(tmp_path: pathlib.Path):
 
 
 def _violation_count_mismatch(tmp_path: pathlib.Path):
-    """n_emitted in sidecar says 5 for 'red' but CSV only has 3 rows — violates rule (h)."""
+    """n_emitted in sidecar says 99 for 'red' but CSV only has 3 rows — violates rule (h)."""
     sidecar = json.loads(json.dumps(_COMPLIANT_SIDECAR))
     for entry in sidecar["terms"]:
         if entry["term"] == _TERM_A:
             entry["n_emitted"] = 99  # lies: says 99 but CSV has 3 rows
     csv_path = tmp_path / "color.csv"
     _write_csv(csv_path, _COMPLIANT_ROWS)
+    sidecar_path = tmp_path / "color.report.json"
+    _write_sidecar(sidecar_path, sidecar)
+    return csv_path, sidecar_path, _LANG, _DOMAIN
+
+
+def _violation_es_no_accent(tmp_path: pathlib.Path):
+    """Spanish CSV with zero accented characters anywhere — violates rule (g/es).
+
+    The validator's es branch requires at least one char from
+    [áéíóúñÁÉÍÓÚÑüÜ¿¡] across the entire concatenated text.
+    We use real es color terms (rojo, azul, negro) and the real es
+    corpus_source but write sentences in plain ASCII Spanish so no
+    accented char appears.
+    """
+    import json as _json
+
+    es_corpus_source = CORPUS_SOURCE_ID["es"]
+    es_term_a = "rojo"
+    es_term_b = "azul"
+    rows = [
+        (es_term_a, es_term_a, "el gato es rojo hoy", 3, es_corpus_source),
+        (es_term_a, es_term_a, "un rojo brillante en la sala", 1, es_corpus_source),
+        (es_term_b, es_term_b, "el azul del cielo es claro", 2, es_corpus_source),
+    ]
+    sidecar = {
+        "language": "es",
+        "domain": "color",
+        "corpus_source": es_corpus_source,
+        "corpus_total_sentences": 1000000,
+        "extracted_at": "2026-05-04T01:00:00Z",
+        "seed": 0,
+        "n_samples_target": 200,
+        "window": {"left": 10, "right": 10, "unit": "whitespace_tokens"},
+        "min_post_target_tokens": 5,
+        "matchers": {"es": "spacy:es_core_news_md"},
+        "terms": [
+            {
+                "term": es_term_a,
+                "n_corpus_hits": 200,
+                "n_kept_after_dedup": 200,
+                "n_emitted": 2,
+                "under_target": True,
+            },
+            {
+                "term": es_term_b,
+                "n_corpus_hits": 150,
+                "n_kept_after_dedup": 150,
+                "n_emitted": 1,
+                "under_target": True,
+            },
+        ],
+    }
+    csv_path = tmp_path / "color.csv"
+    _write_csv(csv_path, rows)
+    sidecar_path = tmp_path / "color.report.json"
+    _write_sidecar(sidecar_path, sidecar)
+    return csv_path, sidecar_path, "es", "color"
+
+
+def _violation_en_too_much_non_ascii(tmp_path: pathlib.Path):
+    """English CSV where >5% of all chars are non-ASCII — violates rule (g/en).
+
+    The validator's en branch checks that >95% of chars are ASCII-ish.
+    We use real en color terms (red, blue) and the real en corpus_source,
+    but pad each sentence with a long run of Cyrillic text so that the
+    non-ASCII fraction well exceeds 5%.
+    """
+    # Build a long non-ASCII filler that will push the ratio below 95%
+    filler = "ЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖЖ"  # 54 Cyrillic
+    rows = [
+        (_TERM_A, _TERM_A, f"the red car stopped {filler}", 1, _CORPUS_SOURCE),
+        (_TERM_A, _TERM_A, f"a red flag waved {filler}", 1, _CORPUS_SOURCE),
+        (_TERM_B, _TERM_B, f"the blue sky {filler}", 1, _CORPUS_SOURCE),
+    ]
+    sidecar = json.loads(json.dumps(_COMPLIANT_SIDECAR))
+    # Fix term counts to match rows above
+    for entry in sidecar["terms"]:
+        if entry["term"] == _TERM_A:
+            entry["n_emitted"] = 2
+        elif entry["term"] == _TERM_B:
+            entry["n_emitted"] = 1
+    # Update: original sidecar has n_emitted=3 for red and 2 for blue;
+    # we only emit 2 red and 1 blue here so we must also add a third row or fix
+    # Add a third TERM_A row to keep n_emitted matching the sidecar's value
+    rows.append((_TERM_A, _TERM_A, f"red means stop {filler}", 0, _CORPUS_SOURCE))
+    for entry in sidecar["terms"]:
+        if entry["term"] == _TERM_A:
+            entry["n_emitted"] = 3
+        elif entry["term"] == _TERM_B:
+            entry["n_emitted"] = 1
+    # Also fix blue count: sidecar says 2 blue, we have 1 blue row -> add one
+    rows.append((_TERM_B, _TERM_B, f"blue water flowed {filler}", 0, _CORPUS_SOURCE))
+    for entry in sidecar["terms"]:
+        if entry["term"] == _TERM_B:
+            entry["n_emitted"] = 2
+    csv_path = tmp_path / "color.csv"
+    _write_csv(csv_path, rows)
     sidecar_path = tmp_path / "color.report.json"
     _write_sidecar(sidecar_path, sidecar)
     return csv_path, sidecar_path, _LANG, _DOMAIN
@@ -305,6 +402,8 @@ _VIOLATIONS = [
     pytest.param(_violation_wrong_corpus_source,      id="wrong_corpus_source"),
     pytest.param(_violation_ru_no_cyrillic,           id="ru_no_cyrillic"),
     pytest.param(_violation_count_mismatch,           id="count_mismatch"),
+    pytest.param(_violation_es_no_accent,             id="es_no_accent"),
+    pytest.param(_violation_en_too_much_non_ascii,    id="en_too_much_non_ascii"),
 ]
 
 
