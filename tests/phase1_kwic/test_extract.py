@@ -1024,3 +1024,74 @@ class TestExtractKwicCLI:
             report = _json.load(f)
         for field in ("language", "domain", "corpus_source", "terms", "matchers"):
             assert field in report, f"Report missing field: {field!r}"
+
+
+# ---------------------------------------------------------------------------
+# Item 6: Chunk-boundary tests for _LEMMATIZE_CHUNK_SIZE boundaries
+# ---------------------------------------------------------------------------
+
+def _build_large_corpus_lines(n_sentences: int, extra_tokens: int = 8) -> list[str]:
+    """Build Leipzig-format TSV lines, each containing the target word 'red'.
+
+    All sentences have the same structure:
+        tok_a_i tok_b_i tok_c_i red suf_0_i ... suf_{extra_tokens-1}_i
+    so each sentence is a valid hit for term "red" (satisfies
+    min_post_target_tokens=5 with extra_tokens=8).
+    """
+    lines: list[str] = []
+    for i in range(n_sentences):
+        prefix = f"tok_a_{i} tok_b_{i} tok_c_{i}"
+        suffix = " ".join(f"suf_{j}_{i}" for j in range(extra_tokens))
+        sentence = f"{prefix} red {suffix}"
+        lines.append(f"{i+1}\t{sentence}")
+    return lines
+
+
+@pytest.mark.parametrize("n_sentences", [511, 512, 513, 1024])
+def test_chunk_boundary_hit_count(tmp_path: pathlib.Path, n_sentences: int) -> None:
+    """extract_kwic returns the correct hit count at chunk boundaries.
+
+    _LEMMATIZE_CHUNK_SIZE = 512.  The boundary cases 511, 512, 513, and 1024
+    exercise:
+    - 511: corpus smaller than one chunk (only the final-partial-chunk flush fires)
+    - 512: exactly one full chunk (full-chunk flush fires once, final is empty)
+    - 513: one full chunk + one-sentence partial chunk (both flush paths fire)
+    - 1024: exactly two full chunks (full-chunk flush fires twice)
+
+    Each sentence contains exactly one hit for "red" (planted at ws-index 3).
+    All sentences are unique, so no dedup collisions.  n_samples is set larger
+    than n_sentences so sampling does not cap the output.
+    """
+    corpus = tmp_path / f"large-{n_sentences}.txt"
+    corpus.write_text(
+        "\n".join(_build_large_corpus_lines(n_sentences)), encoding="utf-8"
+    )
+
+    terms = [_make_term("red", ("red",))]
+    df, report = extract_kwic(
+        lang="en",
+        domain="color",
+        corpus_path=corpus,
+        corpus_source_id="test_corpus",
+        n_samples=n_sentences + 1,  # never cap
+        seed=0,
+        window=10,
+        min_post_target_tokens=5,
+        _matcher_override=StubMatcher(),
+        _terms_override=terms,
+    )
+
+    red_info = next(t for t in report["terms"] if t["term"] == "red")
+
+    assert red_info["n_corpus_hits"] == n_sentences, (
+        f"n_sentences={n_sentences}: expected {n_sentences} corpus hits, "
+        f"got {red_info['n_corpus_hits']}"
+    )
+    assert red_info["n_emitted"] == n_sentences, (
+        f"n_sentences={n_sentences}: expected {n_sentences} emitted hits, "
+        f"got {red_info['n_emitted']}"
+    )
+    assert len(df) == n_sentences, (
+        f"n_sentences={n_sentences}: DataFrame has {len(df)} rows, "
+        f"expected {n_sentences}"
+    )

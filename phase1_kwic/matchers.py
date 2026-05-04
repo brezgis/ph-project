@@ -68,9 +68,11 @@ added for Protocol parity.
 from __future__ import annotations
 
 import bisect
+import collections
 from typing import Iterable, Iterator, Protocol
 
 from baselines.distances import HEAD_POSITION  # imported, NOT redefined
+from phase1_kwic.canon import _pick_lemma  # shared lemma-selection helper
 
 # spaCy model names per language
 _SPACY_MODEL: dict[str, str] = {
@@ -126,9 +128,11 @@ class Matcher(Protocol):
         yielded list has exactly one entry per whitespace-split token of the
         corresponding input sentence.
 
-        SpacyMatcher implements this via ``nlp.pipe`` for a 10–20x speedup
-        over a per-sentence lemmatize loop.  PymorphyMatcher implements this
-        as a simple loop (pymorphy3 has no batch API) for Protocol parity.
+        SpacyMatcher implements this via ``nlp.pipe`` for a typically 2-3x
+        speedup over a per-sentence lemmatize loop (measured ~2.5x on short
+        sentences; grows with sentence length and corpus size).  PymorphyMatcher
+        implements this as a simple loop (pymorphy3 has no batch API) for
+        Protocol parity.
 
         Parameters
         ----------
@@ -284,8 +288,9 @@ class SpacyMatcher:
         """Yield (token, lemma) lists in input order, one per sentence.
 
         Uses ``nlp.pipe`` to process full sentences in a single batched call,
-        achieving 10–20x speedup over per-sentence ``lemmatize`` calls on
-        large corpora (Option A).
+        typically 2-3x faster than a per-sentence ``lemmatize`` loop on modern
+        CPUs with short sentences; speedup grows with sentence length and corpus
+        size (measured ~2.5x, Option A).
 
         Each yielded list has exactly one entry per whitespace-split token of
         the corresponding sentence, preserving the ws-token-space semantics
@@ -315,14 +320,25 @@ class SpacyMatcher:
         """
         self._load()
 
-        sentences_list = list(sentences)
-        if not sentences_list:
-            return
+        # Feed nlp.pipe a generator that buffers sentences into a deque so
+        # the outer loop can retrieve each original sentence in FIFO order.
+        # This keeps memory bounded by the nlp.pipe batch_size (≤128 sentences
+        # in flight) regardless of how large the input iterable is — the whole
+        # iterable is never materialized into a list.
+        buf: collections.deque[str] = collections.deque()
 
-        for sentence, doc in zip(
-            sentences_list,
-            self._nlp.pipe(sentences_list, batch_size=128),
-        ):
+        def _gen():
+            for s in sentences:
+                buf.append(s)
+                yield s
+
+        pipe = self._nlp.pipe(_gen(), batch_size=128)
+
+        # Yield an empty-sentinel check: if the input was empty, nlp.pipe
+        # yields nothing so the loop body never executes and we return cleanly.
+        for doc in pipe:
+            sentence = buf.popleft()
+
             ws_tokens = sentence.split()
             if not ws_tokens:
                 yield []
@@ -354,19 +370,13 @@ class SpacyMatcher:
                 if 0 <= j < len(ws_tokens):
                     ws_groups[j].append((sp_tok.text, sp_tok.lemma_))
 
-            # For each whitespace token, extract the canonical lemma using
-            # the same rule as _lemmatize_ws_token: first alphabetic lemma,
-            # fall back to first pair's lemma, fall back to ws_token.lower().
-            result: list[tuple[str, str]] = []
-            for ws_tok, pairs in zip(ws_tokens, ws_groups):
-                if not pairs:
-                    result.append((ws_tok, ws_tok.lower()))
-                else:
-                    lemma = next(
-                        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
-                        pairs[0][1],
-                    )
-                    result.append((ws_tok, lemma))
+            # For each whitespace token, apply _pick_lemma (shared helper,
+            # single source of truth for the "first alphabetic lemma; fall
+            # back to first pair's lemma; fall back to ws_token.lower()" rule).
+            result: list[tuple[str, str]] = [
+                (ws_tok, _pick_lemma(ws_tok, pairs))
+                for ws_tok, pairs in zip(ws_tokens, ws_groups)
+            ]
 
             yield result
 

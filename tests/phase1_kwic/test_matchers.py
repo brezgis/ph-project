@@ -247,14 +247,18 @@ class TestLemmatizeManyProtocol:
         assert len(results) == 2
 
     def test_en_lemmatize_many_matches_single_per_sentence(self, en_matcher):
-        """Each lemmatize_many result must match calling lemmatize per ws-token.
+        """Each lemmatize_many result must match _lemmatize_ws_token per ws-token.
 
-        Since SpacyMatcher.lemmatize_many preserves per-ws-token semantics
-        (Option B), the result for a sentence must contain exactly one entry
-        per whitespace-token of the sentence, and each lemma must match what
-        lemmatize(ws_token) would return.
+        Uses a sentence with punctuation ("I love red, apples") to exercise the
+        punctuation reconciliation path.  The sentence is chosen to avoid
+        context-sensitive homographs so that the test is stable.
+
+        The result for each whitespace token must match what
+        _lemmatize_ws_token(ws_token, en_matcher) would return for that token.
         """
-        sentence = "I love red apples"
+        from phase1_kwic.canon import _lemmatize_ws_token
+
+        sentence = "I love red, apples"
         ws_tokens = sentence.split()
 
         # Get per-sentence result from lemmatize_many
@@ -267,6 +271,17 @@ class TestLemmatizeManyProtocol:
         # Each entry must be a (surface, lemma) tuple of strings
         for tok, lem in many_result:
             assert isinstance(tok, str) and isinstance(lem, str)
+
+        # Lemma values must match _lemmatize_ws_token for each ws-token
+        for ws_tok, (surface, lemma) in zip(ws_tokens, many_result):
+            expected_lemma = _lemmatize_ws_token(ws_tok, en_matcher)
+            assert lemma == expected_lemma, (
+                f"lemmatize_many lemma {lemma!r} for ws-token {ws_tok!r} does not "
+                f"match _lemmatize_ws_token result {expected_lemma!r}"
+            )
+            assert surface == ws_tok, (
+                f"lemmatize_many surface {surface!r} != ws-token {ws_tok!r}"
+            )
 
     def test_ru_lemmatize_many_matches_single_per_sentence(self, ru_matcher):
         """PymorphyMatcher.lemmatize_many result must match per-ws-token lemmatize.
@@ -303,14 +318,35 @@ class TestLemmatizeManyProtocol:
         assert results == []
 
     def test_en_lemmatize_many_order_preserved(self, en_matcher):
-        """Output order matches input order (sentence 0 maps to result 0)."""
-        sentences = ["The sky is blue", "I love red apples", "Mother came home"]
+        """Output order matches input order (sentence i maps to result i).
+
+        Uses three sentences each starting with a clearly distinct first
+        whitespace token so we can assert that result[i][0][0] matches
+        sentences[i].split()[0].
+        """
+        sentences = [
+            "Apples are bright red fruits",
+            "Bananas are yellow and sweet",
+            "Cherries are small and pink",
+        ]
         results = list(en_matcher.lemmatize_many(sentences))
-        assert len(results) == 3
-        # Each result should contain at least one token
+        assert len(results) == 3, (
+            f"Expected 3 results for 3 sentences, got {len(results)}"
+        )
+        # Each result must contain at least one token
         for i, r in enumerate(results):
             assert len(r) >= 1, (
                 f"Result {i} is empty for sentence {sentences[i]!r}"
+            )
+        # The surface form at index 0 of each result must match the first
+        # whitespace token of the corresponding input sentence.
+        for i, (sentence, result) in enumerate(zip(sentences, results)):
+            expected_first_ws_tok = sentence.split()[0]
+            actual_first_surface = result[0][0]
+            assert actual_first_surface == expected_first_ws_tok, (
+                f"Result[{i}][0][0] = {actual_first_surface!r}, "
+                f"expected first ws-token {expected_first_ws_tok!r} for sentence "
+                f"{sentence!r} — output may be in wrong order"
             )
 
     def test_es_lemmatize_many_exists_and_returns_lists(self, es_matcher):
@@ -320,6 +356,121 @@ class TestLemmatizeManyProtocol:
         assert len(results) == 2
         for r in results:
             assert isinstance(r, list)
+
+    def test_en_lemmatize_many_accepts_generator(self, en_matcher):
+        """lemmatize_many must accept a generator (not just a list).
+
+        The Protocol docstring promises 'May be a generator (consumed once)'.
+        The deque-based implementation must not materialise the entire iterable
+        before processing — passing a generator must work correctly.
+        """
+        sentences = ["Apples are red", "Bananas are yellow", "Cherries are pink"]
+
+        def sentence_gen():
+            yield from sentences
+
+        results = list(en_matcher.lemmatize_many(sentence_gen()))
+        assert len(results) == 3, (
+            f"Expected 3 results from generator input, got {len(results)}"
+        )
+        # The first ws-token of each result must match the corresponding sentence
+        for i, (sentence, result) in enumerate(zip(sentences, results)):
+            expected_first = sentence.split()[0]
+            assert result[0][0] == expected_first, (
+                f"Result[{i}][0][0] = {result[0][0]!r}, "
+                f"expected {expected_first!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Punctuation reconciliation — SpacyMatcher.lemmatize_many bisect-offset mapping
+# ---------------------------------------------------------------------------
+
+class TestLemmatizeManyPunctuation:
+    """Direct coverage of the bisect-based offset mapping in SpacyMatcher.lemmatize_many.
+
+    spaCy splits "red," into two sub-tokens ["red", ","].  The reconciliation
+    algorithm must map both back to the single whitespace token "red," and then
+    apply the 'first alphabetic lemma' rule to yield lemma "red".
+    """
+
+    def test_en_punctuation_reconciliation(self, en_matcher):
+        """lemmatize_many("I love red, apples") yields ws-aligned result.
+
+        Expected output length: 4 (one per whitespace token).
+        Entry at index 2 must be ("red,", "red") — trailing comma on surface
+        form, clean lemma.
+        """
+        from phase1_kwic.canon import _lemmatize_ws_token
+
+        sentence = "I love red, apples"
+        results = list(en_matcher.lemmatize_many([sentence]))
+        assert len(results) == 1
+        result = results[0]
+        ws_tokens = sentence.split()
+
+        assert len(result) == len(ws_tokens), (
+            f"Expected {len(ws_tokens)} entries (one per ws-token), got {len(result)}. "
+            f"Full result: {result}"
+        )
+
+        surface_at_2, lemma_at_2 = result[2]
+        assert surface_at_2 == "red,", (
+            f"Expected surface 'red,' at index 2, got {surface_at_2!r}"
+        )
+        assert lemma_at_2 == "red", (
+            f"Expected lemma 'red' at index 2 (trailing comma stripped by "
+            f"first-alphabetic-lemma rule), got {lemma_at_2!r}"
+        )
+
+        # All entries must agree with _lemmatize_ws_token for stability
+        for ws_tok, (surface, lemma) in zip(ws_tokens, result):
+            expected = _lemmatize_ws_token(ws_tok, en_matcher)
+            assert lemma == expected, (
+                f"lemma {lemma!r} for ws-token {ws_tok!r} != "
+                f"_lemmatize_ws_token result {expected!r}"
+            )
+
+    def test_es_punctuation_reconciliation(self, es_matcher):
+        """lemmatize_many("Me gusta la rosa, mucho") — 'rosa,' at some index.
+
+        The surface form at the index of 'rosa,' must retain the comma, but
+        the lemma must be the clean root form without punctuation.
+        """
+        from phase1_kwic.canon import _lemmatize_ws_token
+
+        sentence = "Me gusta la rosa, mucho"
+        results = list(es_matcher.lemmatize_many([sentence]))
+        assert len(results) == 1
+        result = results[0]
+        ws_tokens = sentence.split()
+
+        assert len(result) == len(ws_tokens), (
+            f"Expected {len(ws_tokens)} entries (one per ws-token), got {len(result)}. "
+            f"Full result: {result}"
+        )
+
+        # Find the "rosa," entry
+        rosa_idx = ws_tokens.index("rosa,")
+        surface_at_rosa, lemma_at_rosa = result[rosa_idx]
+        assert surface_at_rosa == "rosa,", (
+            f"Expected surface 'rosa,' at index {rosa_idx}, got {surface_at_rosa!r}"
+        )
+        # The lemma should be alphabetic (no trailing comma)
+        assert all(not c == "," for c in lemma_at_rosa), (
+            f"Lemma {lemma_at_rosa!r} still contains a comma"
+        )
+        assert any(c.isalpha() for c in lemma_at_rosa), (
+            f"Lemma {lemma_at_rosa!r} has no alphabetic characters"
+        )
+
+        # All entries must agree with _lemmatize_ws_token
+        for ws_tok, (surface, lemma) in zip(ws_tokens, result):
+            expected = _lemmatize_ws_token(ws_tok, es_matcher)
+            assert lemma == expected, (
+                f"lemma {lemma!r} for ws-token {ws_tok!r} != "
+                f"_lemmatize_ws_token result {expected!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
