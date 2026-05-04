@@ -11,7 +11,13 @@ COSI 115a NLP Fundamentals final project. Anna Brezgis, Brandeis. Due May 6, 202
 Notebook-faithful adaptation of **Kushnareva et al. (2021) — Artificial Text Detection via Examining the Topology of Attention Maps** (EMNLP). Their original code lives in `reference/`, frozen, never edited. Our adapted notebooks live in `notebooks/`.
 
 Their task: binary classification of human vs. machine text.
-Our task: cross-linguistic comparison of semantic domains (color, emotion, kinship) across English, Russian, and Spanish.
+Our task: cross-linguistic comparison of semantic domains across English, Russian, and Spanish.
+
+### Current scope (May 2026)
+
+The COSI 115a final analysis is **scoped to the COLOR domain only**. Decided 2026-05-04 due to corpus sparsity in news-genre attestation for emotion and kinship vocabulary across ru/* and en/es emotion+kinship (see `bd show ph-project-bmb`). Color is well-attested in news; the 3M-news rescue under `bd show ph-project-i6q` lifts ≥31 of 34 color canon terms to n ≥ 150.
+
+The emotion and kinship canon-term YAMLs in `canon-terms/{en,ru,es}/{emotion,kinship}.yaml` remain in place and are still literature-grounded — they're available for follow-up work after May 6 but are not analyzed in this study. Phase 3 notebooks (`mwk.*` family) iterate over `(lang × {color})`, not `(lang × {color, emotion, kinship})`.
 
 Canon term lists are derived from published linguistics/anthropology literature, not assembled informally — see `canon-terms/`.
 
