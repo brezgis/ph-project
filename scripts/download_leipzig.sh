@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 # scripts/download_leipzig.sh
 # -----------------------------------------------------------------------
-# Reproducible download of Leipzig 1M news corpora used in ph-project
-# Phase 1 (KWIC extraction).
+# Reproducible download of multi-year Leipzig 1M news corpora used in
+# ph-project Phase 1 (KWIC extraction).
+#
+# Corpus set: years {2019, 2020, 2023} × langs {en, ru, es} = 9 corpora.
+# Each year contributes ~1M sentences; the full set is ~3M per language.
+# Year coverage is symmetric across all three languages (the only set with
+# full overlap on Leipzig), keeping cross-linguistic comparisons clean.
 #
 # Leipzig corpora
 # ---------------
-# Pinned corpus IDs (1M-sentence news, year 2020):
-#   eng_news_2020_1M  — English
-#   rus_news_2020_1M  — Russian
-#   spa_news_2020_1M  — Spanish
+# Pinned corpus IDs (1M-sentence news):
+#   eng_news_2019_1M  — English 2019
+#   eng_news_2020_1M  — English 2020
+#   eng_news_2023_1M  — English 2023
+#   rus_news_2019_1M  — Russian 2019
+#   rus_news_2020_1M  — Russian 2020
+#   rus_news_2023_1M  — Russian 2023
+#   spa_news_2019_1M  — Spanish 2019
+#   spa_news_2020_1M  — Spanish 2020
+#   spa_news_2023_1M  — Spanish 2023
 #
 # URL pattern:
 #   https://downloads.wortschatz-leipzig.de/corpora/<ID>.tar.gz
@@ -17,14 +28,12 @@
 # Files produced
 # --------------
 # Tarballs (kept for re-extract-without-re-download):
-#   data/leipzig/_downloads/eng_news_2020_1M.tar.gz  (~200 MB)
-#   data/leipzig/_downloads/rus_news_2020_1M.tar.gz  (~200 MB)
-#   data/leipzig/_downloads/spa_news_2020_1M.tar.gz  (~200 MB)
+#   data/leipzig/_downloads/<ID>.tar.gz  (~200 MB each, ~1.8 GB total)
 #
 # Extracted sentences files:
-#   data/leipzig/en/eng_news_2020_1M-sentences.txt
-#   data/leipzig/ru/rus_news_2020_1M-sentences.txt
-#   data/leipzig/es/spa_news_2020_1M-sentences.txt
+#   data/leipzig/en/eng_news_{2019,2020,2023}_1M-sentences.txt
+#   data/leipzig/ru/rus_news_{2019,2020,2023}_1M-sentences.txt
+#   data/leipzig/es/spa_news_{2019,2020,2023}_1M-sentences.txt
 #
 # SHA-256 verification
 # --------------------
@@ -32,6 +41,8 @@
 # If a value is still a TODO placeholder this script computes and PRINTS
 # the actual hash of the downloaded tarball rather than silently accepting
 # it.  Populate the values after the first successful download to pin them.
+# The 3 × 2020 hashes are pre-populated; the 2019 and 2023 hashes are
+# TODO and will be printed on first run.
 #
 # Usage
 # -----
@@ -63,18 +74,30 @@ mkdir -p "$DOWNLOADS_DIR"
 # Array indices must stay in sync.
 # -----------------------------------------------------------------------
 
-# SYNC NOTE: CORPUS_IDS must stay in sync with CORPUS_SOURCE_ID in
+# SYNC NOTE: CORPUS_IDS must stay in sync with CORPUS_SOURCE_IDS in
 # phase1_kwic/extract.py (Python dict, canonical source of truth).
 # If you add or rename a corpus here, update that dict too.
 CORPUS_IDS=(
+    "eng_news_2019_1M"
     "eng_news_2020_1M"
+    "eng_news_2023_1M"
+    "rus_news_2019_1M"
     "rus_news_2020_1M"
+    "rus_news_2023_1M"
+    "spa_news_2019_1M"
     "spa_news_2020_1M"
+    "spa_news_2023_1M"
 )
 
 LANG_DIRS=(
     "en"
+    "en"
+    "en"
     "ru"
+    "ru"
+    "ru"
+    "es"
+    "es"
     "es"
 )
 
@@ -86,9 +109,18 @@ BASE_URL="https://downloads.wortschatz-leipzig.de/corpora"
 # Populate these after the first run.
 # -----------------------------------------------------------------------
 declare -A EXPECTED_SHA256=(
-    ["eng_news_2020_1M"]="TODO"
-    ["rus_news_2020_1M"]="TODO"
-    ["spa_news_2020_1M"]="TODO"
+    # 2019 corpora — TODO: populate after first download (Phase B)
+    ["eng_news_2019_1M"]="TODO"
+    ["rus_news_2019_1M"]="TODO"
+    ["spa_news_2019_1M"]="TODO"
+    # 2020 corpora — sha256 pinned from prior download run
+    ["eng_news_2020_1M"]="be782eb82690415241d623fd2448dfd3fc68102ac1ce971107cb130420abbb41"
+    ["rus_news_2020_1M"]="f522a9cccc1d63a5f2ccf11a47e144dd5abd1c840e8ccfb90c249630aaad4657"
+    ["spa_news_2020_1M"]="89fb1319f53b341466c065152467cb1bd3789a3ed9aa143807b1952503ef1d50"
+    # 2023 corpora — TODO: populate after first download (Phase B)
+    ["eng_news_2023_1M"]="TODO"
+    ["rus_news_2023_1M"]="TODO"
+    ["spa_news_2023_1M"]="TODO"
 )
 
 # -----------------------------------------------------------------------
@@ -227,7 +259,7 @@ download_corpus() {
 # -----------------------------------------------------------------------
 
 echo ""
-echo "=== Leipzig 1M news corpora download ==="
+echo "=== Leipzig multi-year 1M news corpora download (2019 / 2020 / 2023) ==="
 echo "Data root: $DATA_DIR"
 
 for i in "${!CORPUS_IDS[@]}"; do

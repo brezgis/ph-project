@@ -43,7 +43,7 @@ Columns are fixed:
 | `labels`        | string | Substrate-compat alias of `term` (identical content; see below).             |
 | `sentence`      | string | The KWIC string, ±10 whitespace tokens around the target. See "Window".      |
 | `target_idx`    | int    | Zero-based index of the target token within `sentence` (post-tokenization). |
-| `corpus_source` | string | Pinned Leipzig corpus ID, e.g., `eng_news_2020_1M`.                          |
+| `corpus_source` | string | Originating Leipzig corpus ID for this row's sentence; multi-corpus extractions emit multiple distinct values across rows. e.g., `eng_news_2020_1M`. |
 
 ### Why these columns and only these
 
@@ -160,7 +160,7 @@ provenance and per-term diagnostics. Schema:
 {
   "language": "ru",
   "domain": "kinship",
-  "corpus_source": "rus_news_2020_1M",
+  "corpus_source": ["rus_news_2019_1M", "rus_news_2020_1M", "rus_news_2023_1M"],
   "corpus_total_sentences": 1000000,
   "extracted_at": "2026-05-03T18:00:00Z",
   "seed": 0,
@@ -190,6 +190,15 @@ provenance and per-term diagnostics. Schema:
 The report is **the** place to look for "did we hit the 200-per-term
 target?" — the validation notebook in Phase 1 reads it directly.
 
+**Multi-corpus provenance note:** the top-level `corpus_source` field in the
+sidecar is a list of the input corpus IDs in the order they were ingested
+(e.g., `["rus_news_2019_1M", "rus_news_2020_1M", "rus_news_2023_1M"]`).
+The per-row `corpus_source` column in the CSV records the originating corpus
+for each individual sentence — so a multi-year extraction will have rows
+with different `corpus_source` values, one per year. The two uses are
+complementary: the sidecar list documents the full input set; the CSV column
+enables per-sentence provenance tracing.
+
 ## Reproducibility
 
 A KWIC CSV is a deterministic function of:
@@ -216,7 +225,8 @@ The schema-tests subtask (`ph-project-5f9.X` — to be filed) enforces:
 * Each `term` value appears in the corresponding canon-term YAML.
 * `target_idx` is a non-negative integer less than the number of
   whitespace tokens in `sentence`.
-* The `corpus_source` value matches the pinned ID for the language.
+* The `corpus_source` value is one of the pinned IDs for the language
+  (`CORPUS_SOURCE_IDS[lang]`).
 * The Russian CSVs contain Cyrillic characters; the Spanish CSVs
   contain at least one accented character; English CSVs are predominantly
   ASCII (a soft check — proper nouns may include diacritics).

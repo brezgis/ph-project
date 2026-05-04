@@ -34,7 +34,7 @@ c. No NaN, empty, or whitespace-only sentence values.
 d. Every term value in the CSV appears in the canon-terms YAML.
 e. target_idx is integer dtype, 0 <= target_idx < len(sentence.split())
    for every row.
-f. corpus_source matches CORPUS_SOURCE_ID[lang] for every row.
+f. corpus_source is one of CORPUS_SOURCE_IDS[lang] for every row.
 g. Language-specific character checks:
    - ru: every sentence has at least one Cyrillic char.
    - es: at least one accented char anywhere in the file.
@@ -51,7 +51,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from phase1_kwic.extract import CORPUS_SOURCE_ID
+from phase1_kwic.extract import CORPUS_SOURCE_IDS
 
 # ---------------------------------------------------------------------------
 # Repo root — two parents up from this file
@@ -144,11 +144,12 @@ def _assert_schema_compliant(
             f"for sentence with {n_tokens} tokens: {row['sentence']!r}"
         )
 
-    # (f) corpus_source matches pinned ID for lang ------------------------
-    expected_source = CORPUS_SOURCE_ID[lang]
-    assert (df["corpus_source"] == expected_source).all(), (
-        f"rule(f): corpus_source must be {expected_source!r} for lang={lang!r}; "
-        f"found: {df['corpus_source'].unique().tolist()}"
+    # (f) corpus_source is one of the pinned IDs for lang ----------------
+    expected_sources = set(CORPUS_SOURCE_IDS[lang])
+    actual_sources = set(df["corpus_source"].unique())
+    assert actual_sources <= expected_sources, (
+        f"rule(f): corpus_source values must be a subset of {expected_sources!r} "
+        f"for lang={lang!r}; found unexpected: {actual_sources - expected_sources!r}"
     )
 
     # (g) Language-specific character checks ------------------------------
