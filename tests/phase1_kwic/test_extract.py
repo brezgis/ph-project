@@ -42,10 +42,18 @@ class StubMatcher:
     one (surface, lemma) pair per whitespace token.
 
     This keeps tests fast and free of model dependencies.
+
+    lemmatize_many is provided to satisfy the Matcher Protocol used by
+    extract.py's batched corpus loop.
     """
 
     def lemmatize(self, sentence: str) -> list[tuple[str, str]]:
         return [(tok, tok.lower()) for tok in sentence.split()]
+
+    def lemmatize_many(self, sentences):
+        """Yield per-sentence (token, lemma) lists; delegates to lemmatize."""
+        for sentence in sentences:
+            yield self.lemmatize(sentence)
 
 
 # ---------------------------------------------------------------------------
@@ -713,6 +721,10 @@ class TestPunctuationHandling:
                     lemma = stripped.lower() if stripped else tok.lower()
                     result.append((tok, lemma))
                 return result
+
+            def lemmatize_many(self, sentences):
+                for sentence in sentences:
+                    yield self.lemmatize(sentence)
 
         # 'red,' with the trailing comma — matcher strips comma → lemma 'red'
         sentences = [
