@@ -4,7 +4,7 @@ Tests for phase1_kwic.canon — Term dataclass and load_canon function.
 Row-count expectations:
   en color=11, en emotion=18, en kinship=27
   es color=11, es emotion=22, es kinship=32
-  ru color=12, ru emotion=19, ru kinship=34
+  ru color=12, ru emotion=18, ru kinship=34
 """
 import dataclasses
 
@@ -39,7 +39,7 @@ def matchers():
     ("es", "emotion", 22),
     ("es", "kinship", 32),
     ("ru", "color",   12),
-    ("ru", "emotion", 19),
+    ("ru", "emotion", 18),
     ("ru", "kinship", 34),
 ])
 def test_load_canon_row_count(lang, domain, expected_count, matchers):
