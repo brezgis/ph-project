@@ -26,6 +26,7 @@ data/kwic/**/*.json
 data/attention/
 data/fasttext/
 data/leipzig/
+data/phase3/
 *.npz
 *.npy
 *.pt
@@ -39,6 +40,7 @@ results/intermediate/
 results/attention/
 results/ph_features/
 results/raw/
+results/phase3_thresholds/
 
 # OS
 .DS_Store
