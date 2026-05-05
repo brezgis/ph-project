@@ -70,14 +70,19 @@ as H_0 features and corrupt distance computations.
 """
 from __future__ import annotations
 
+import io
 import json
+import logging
 import pathlib
 import re
+import time
 import warnings
 from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -476,3 +481,274 @@ def to_giotto_format(
             feat_offset += max_f
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Pairwise distance computation
+# ---------------------------------------------------------------------------
+
+def compute_per_head_distances(
+    per_layer_head_diagrams: dict,
+    sample_indices: np.ndarray,
+    layer: int,
+    head: int,
+    metric: str,
+    dims: tuple = (0, 1),
+    n_jobs: int = -1,
+) -> np.ndarray:
+    """Compute pairwise persistence-diagram distances for a single (layer, head).
+
+    Extracts diagrams for ``(layer, head)``, converts them to giotto-tda format
+    via ``to_giotto_format``, then runs
+    ``gtda.diagrams.PairwiseDistance(metric=metric, order=None)`` to get the
+    per-homology-dimension distance matrix.
+
+    ``order=None`` is the giotto-tda parameter that returns shape
+    ``(N, N, n_dims)`` rather than aggregating across dims. The ``n_dims``
+    output axis is determined by the unique homology dimensions present in the
+    giotto-tda diagram array — matching ``dims`` exactly when ``to_giotto_format``
+    is called with the same ``dims``.
+
+    Parameters
+    ----------
+    per_layer_head_diagrams:
+        ``dict[tuple[int, int], list[dict[int, np.ndarray]]]`` as returned by
+        ``load_barcode_json`` or ``load_lang_barcodes``.
+    sample_indices:
+        Integer array of sample positions (0-based) to include.
+    layer:
+        Layer index (0-based).
+    head:
+        Head index (0-based).
+    metric:
+        Distance metric: ``'wasserstein'`` (W_2) or ``'bottleneck'``.
+    dims:
+        Tuple of homology dimensions. Default ``(0, 1)``.
+    n_jobs:
+        Number of parallel jobs for giotto-tda. ``-1`` = use all cores.
+
+    Returns
+    -------
+    np.ndarray of float32
+        Shape ``(N, N, len(dims))`` where ``N = len(sample_indices)``.
+        The last axis indexes homology dimensions in the same order as ``dims``.
+        The matrix is symmetrized in float64 before downcasting (giotto-tda's
+        parallel implementation can introduce ~1e-4 asymmetry in the output;
+        downstream consumers expect ``D[i, j] == D[j, i]`` exactly).
+    """
+    from gtda.diagrams import PairwiseDistance  # deferred to avoid top-level import cost
+
+    giotto_diagrams = to_giotto_format(per_layer_head_diagrams, sample_indices, layer, head, dims=dims)
+
+    metric_params = {"p": 2} if metric == "wasserstein" else None
+
+    pd_obj = PairwiseDistance(
+        metric=metric,
+        metric_params=metric_params,
+        order=None,
+        n_jobs=n_jobs,
+    )
+
+    result = pd_obj.fit_transform(giotto_diagrams)  # shape (N, N, n_dims), float64
+
+    # Enforce mathematical symmetry. giotto-tda's parallel computation produces
+    # D[i,j] != D[j,i] up to ~1e-4 in float32; symmetrize in float64 first.
+    result = 0.5 * (result + np.swapaxes(result, 0, 1))
+
+    return result.astype(np.float32)
+
+
+def compute_full_distance_tensor(
+    per_layer_head_diagrams: dict,
+    sample_indices: np.ndarray,
+    metric: str,
+    dims: tuple = (0, 1),
+    layers: range = range(12),
+    heads: range = range(12),
+    progress: bool = True,
+    n_jobs: int = -1,
+) -> np.ndarray:
+    """Compute the full ``(n_layers, n_heads, N, N, len(dims))`` distance tensor.
+
+    Calls ``compute_per_head_distances`` for every ``(layer, head)`` pair,
+    logging per-pair wall time so the overnight sweep can fail fast if
+    calibration drifts significantly.
+
+    Parameters
+    ----------
+    per_layer_head_diagrams:
+        ``dict[tuple[int, int], list[dict[int, np.ndarray]]]`` from the loader.
+    sample_indices:
+        Integer array of sample positions (0-based) to include.
+    metric:
+        Distance metric: ``'wasserstein'`` or ``'bottleneck'``.
+    dims:
+        Homology dimensions. Default ``(0, 1)``.
+    layers:
+        Which layer indices to compute. Default ``range(12)`` (all layers).
+    heads:
+        Which head indices to compute. Default ``range(12)`` (all heads).
+    progress:
+        If ``True``, display a tqdm progress bar over ``(layer, head)`` pairs.
+    n_jobs:
+        Parallelism per ``PairwiseDistance`` call. ``-1`` = all cores.
+
+    Returns
+    -------
+    np.ndarray of float32
+        Shape ``(len(layers), len(heads), N, N, len(dims))``.
+
+    Notes
+    -----
+    At N=600 the tensor is approximately 166 MB per metric (float32 × 12 × 12 × 600 × 600 × 2).
+    """
+    try:
+        from tqdm import tqdm as _tqdm
+        _HAS_TQDM = True
+    except ImportError:
+        _HAS_TQDM = False
+
+    layers_list = list(layers)
+    heads_list = list(heads)
+
+    n_l = len(layers_list)
+    n_h = len(heads_list)
+    n_samples = len(sample_indices)
+    n_dims = len(dims)
+
+    tensor = np.empty((n_l, n_h, n_samples, n_samples, n_dims), dtype=np.float32)
+
+    pairs = [(li, hi, layer, head) for li, layer in enumerate(layers_list) for hi, head in enumerate(heads_list)]
+
+    iterator = _tqdm(pairs, desc=f"PairwiseDistance ({metric})") if (progress and _HAS_TQDM) else pairs
+
+    for li, hi, layer, head in iterator:
+        t0 = time.perf_counter()
+        per_head = compute_per_head_distances(
+            per_layer_head_diagrams, sample_indices,
+            layer=layer, head=head, metric=metric, dims=dims, n_jobs=n_jobs,
+        )
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "compute_full_distance_tensor: layer=%d head=%d metric=%s elapsed=%.2fs",
+            layer, head, metric, elapsed,
+        )
+        tensor[li, hi] = per_head
+
+    return tensor
+
+
+def cache_path(cache_dir: Union[str, pathlib.Path], metric: str) -> pathlib.Path:
+    """Return the canonical cache file path for a given metric.
+
+    Both homology dimensions (H_0 and H_1) are stored in a single ``.npz``
+    file; there is no per-dim suffix.
+
+    Parameters
+    ----------
+    cache_dir:
+        Directory where distance tensors are cached.
+    metric:
+        Distance metric string (``'wasserstein'`` or ``'bottleneck'``).
+
+    Returns
+    -------
+    pathlib.Path
+        ``cache_dir / f'{metric}.npz'``
+    """
+    return pathlib.Path(cache_dir) / f"{metric}.npz"
+
+
+def save_distance_tensor(
+    tensor: np.ndarray,
+    sample_metadata: pd.DataFrame,
+    dims: tuple,
+    metric: str,
+    path: Union[str, pathlib.Path],
+) -> None:
+    """Save a distance tensor and its sample metadata to a ``.npz`` file.
+
+    The metadata DataFrame is serialised to JSON (records orientation) and
+    stored as a bytes scalar inside the archive.  This lets downstream subtasks
+    load a self-contained tensor without re-deriving the ``(lang, term)``
+    mapping.
+
+    Parameters
+    ----------
+    tensor:
+        Float32 array of shape ``(n_layers, n_heads, N, N, len(dims))``.
+    sample_metadata:
+        DataFrame with one row per sample; must have at least ``['lang', 'term',
+        'sentence_idx_within_term', 'source_file', 'source_part']`` columns.
+    dims:
+        Tuple of homology dimensions stored in the tensor's last axis.
+    metric:
+        Distance metric string (``'wasserstein'`` or ``'bottleneck'``).
+    path:
+        Destination ``.npz`` path.  Parent directory must exist.
+
+    Notes
+    -----
+    Saved keys:
+      - ``tensor`` — the float32 distance array.
+      - ``metadata_json`` — DataFrame serialised as a UTF-8 JSON byte array.
+      - ``metric`` — 0-d string array.
+      - ``homology_dimensions`` — int array of length ``len(dims)``.
+    """
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    metadata_json = sample_metadata.to_json(orient="records").encode("utf-8")
+
+    np.savez(
+        path,
+        tensor=tensor.astype(np.float32),
+        metadata_json=np.frombuffer(metadata_json, dtype=np.uint8),
+        metric=np.array(metric),
+        homology_dimensions=np.array(list(dims), dtype=np.int32),
+    )
+
+
+def load_distance_tensor(
+    path: Union[str, pathlib.Path],
+) -> tuple:
+    """Load a distance tensor saved by ``save_distance_tensor``.
+
+    Parameters
+    ----------
+    path:
+        Path to a ``.npz`` file written by ``save_distance_tensor``.
+
+    Returns
+    -------
+    tuple[np.ndarray, pd.DataFrame, str, tuple]
+        ``(tensor, metadata_df, metric, homology_dimensions)`` where:
+
+        - ``tensor`` — float32 array, shape as saved.
+        - ``metadata_df`` — DataFrame reconstructed from the saved JSON.
+        - ``metric`` — distance metric string (``'wasserstein'`` or ``'bottleneck'``).
+        - ``homology_dimensions`` — tuple of ints, e.g. ``(0, 1)``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``path`` does not exist.
+    KeyError
+        If required keys are missing from the archive.
+    """
+    path = pathlib.Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Distance tensor cache not found: {path}")
+
+    archive = np.load(path, allow_pickle=False)
+
+    tensor = archive["tensor"].astype(np.float32)
+
+    metadata_bytes = archive["metadata_json"].tobytes()
+    metadata_df = pd.read_json(io.BytesIO(metadata_bytes), orient="records")
+
+    metric = str(archive["metric"])
+
+    homology_dimensions = tuple(int(d) for d in archive["homology_dimensions"])
+
+    return tensor, metadata_df, metric, homology_dimensions
