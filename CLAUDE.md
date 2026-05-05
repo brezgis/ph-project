@@ -15,7 +15,7 @@ Our task: cross-linguistic comparison of semantic domains across English, Russia
 
 ### Current scope (May 2026)
 
-The COSI 115a final analysis is **scoped to the COLOR domain only**. Decided 2026-05-04 due to corpus sparsity in news-genre attestation for emotion and kinship vocabulary across ru/* and en/es emotion+kinship (see `bd show ph-project-bmb`). Color is well-attested in news; the 3M-news rescue under `bd show ph-project-i6q` lifts ≥31 of 34 color canon terms to n ≥ 150.
+The COSI 115a final analysis is **scoped to the COLOR domain only**. Decided 2026-05-04 due to corpus sparsity in news-genre attestation for emotion and kinship vocabulary across ru/* and en/es emotion+kinship (see `bd show ph-project-bmb`). Color is well-attested in news; the multi-year-news rescue under `bd show ph-project-i6q` lifts 33 of 34 color canon terms to n ≥ 150. The single residual, Russian `фиолетовый` (n=104), is kept as a documented under-target casualty rather than dropped — it is a Berlin & Kay basic color term and n=104 still supports an mBERT attention graph, just noisier than the n≥150 terms (see `bd show ph-project-bcy`).
 
 The emotion and kinship canon-term YAMLs in `canon-terms/{en,ru,es}/{emotion,kinship}.yaml` remain in place and are still literature-grounded — they're available for follow-up work after May 6 but are not analyzed in this study. Phase 3 notebooks (`mwk.*` family) iterate over `(lang × {color})`, not `(lang × {color, emotion, kinship})`.
 
