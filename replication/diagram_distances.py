@@ -1013,11 +1013,16 @@ def permutation_test_per_head(
 # ---------------------------------------------------------------------------
 
 def _normalize_gloss(g: str) -> str:
-    """Strip "dark " and "light " prefixes and lowercase, for YAML gloss join keys.
+    """Strip ``"dark "`` or ``"light "`` prefix and lowercase a YAML gloss string.
 
-    This is the canonical join key for the Russian blue split:
+    The prefixes are stripped **unconditionally** — not just before "blue".
+    The primary motivating case is the Russian-blue split:
+
     ``_normalize_gloss("dark blue")  → "blue"``
     ``_normalize_gloss("light blue") → "blue"``
+
+    but the implementation strips the prefix regardless of what follows it
+    (e.g. ``"dark green"`` → ``"green"`` if that ever appeared in a YAML).
 
     Without this normalisation, a naive merge on ``gloss == en_term`` silently
     drops **both** Russian blue BCTs (синий and голубой) from the translation
@@ -1103,9 +1108,13 @@ def load_translation_triples(
     ------
     FileNotFoundError
         If any of the three YAML files are missing.
-    ValueError
-        If a Spanish term has no matching English entry via normalized gloss,
-        or if an English term has no Spanish counterpart.
+
+    Notes
+    -----
+    If an English term has no Spanish counterpart (i.e., the normalized gloss
+    does not appear in ``es_by_norm``), the ``es_term`` column will be ``None``
+    for that row.  With the current complete canon files this does not occur,
+    but no ``ValueError`` is raised — callers should validate if needed.
     """
     canon_dir = pathlib.Path(canon_dir)
 
@@ -1211,45 +1220,55 @@ def per_term_test_statistic(
 
     triu_i, triu_j = np.triu_indices(n, k=1)
 
-    # Build a boolean mask: True where both samples belong to the same triple
-    # and are from different languages.
-    same_triple_mask = np.zeros(len(triu_i), dtype=bool)
+    li = lang_vec[triu_i]
+    lj = lang_vec[triu_j]
+    ti = term_vec[triu_i]
+    tj = term_vec[triu_j]
 
-    for _, row in triples_df.iterrows():
-        # If this row is a blue row and there are two blue rows (the duplication case),
-        # pick the one matching ru_blue_choice.
-        if row["en_term"] == "blue":
-            # Identify if there are multiple blue rows
-            blue_rows = triples_df[triples_df["en_term"] == "blue"]
-            if len(blue_rows) > 1 and row["ru_term"] != ru_blue_choice:
-                continue  # skip the non-chosen blue variant
+    # Pre-compute cross-language mask (upper-triangle, shape (P,))
+    cross_lang = li != lj
 
-        triple_lang_to_term = {
+    # Pre-filter blue rows once to avoid re-filtering inside the loop.
+    blue_rows = triples_df[triples_df["en_term"] == "blue"]
+    has_multiple_blues = len(blue_rows) > 1
+
+    # Build a (N,) array: triple_id[k] = the index of the triple that sample k
+    # belongs to under the chosen selection, or -1 if no triple matches.
+    # We then vectorize the pair membership check using boolean comparison on
+    # (N,)-shaped arrays — same style as per_domain_test_statistic.
+    triple_id_vec = np.full(n, -1, dtype=np.intp)
+
+    for triple_idx, (_, row) in enumerate(triples_df.iterrows()):
+        # Skip the non-chosen Russian-blue variant when two blue rows are present.
+        if row["en_term"] == "blue" and has_multiple_blues:
+            if row["ru_term"] != ru_blue_choice:
+                continue
+
+        triple_lang_to_term: dict[str, str] = {
             "en": row["en_term"],
             "ru": row["ru_term"],
             "es": row["es_term"],
         }
 
-        # For each pair (triu_i[k], triu_j[k]), check if they form a cross-language
-        # same-triple pair.
-        li = lang_vec[triu_i]
-        lj = lang_vec[triu_j]
-        ti = term_vec[triu_i]
-        tj = term_vec[triu_j]
+        # Vectorized membership: sample k belongs to this triple iff its
+        # (lang, term) pair matches the triple's entry for that language.
+        member = np.zeros(n, dtype=bool)
+        for lang, term in triple_lang_to_term.items():
+            if term is not None:
+                member |= (lang_vec == lang) & (term_vec == term)
 
-        cross_lang = li != lj
+        # Assign triple_id to all samples that belong to this triple.
+        # Samples already assigned to an earlier triple keep their original id
+        # (triples are disjoint by construction, so this never overwrites).
+        triple_id_vec = np.where(member & (triple_id_vec < 0), triple_idx, triple_id_vec)
 
-        # Check triple membership: sample i matches triple's lang+term, and so does j
-        i_in_triple = np.array([
-            triple_lang_to_term.get(l, None) == t
-            for l, t in zip(li, ti)
-        ])
-        j_in_triple = np.array([
-            triple_lang_to_term.get(l, None) == t
-            for l, t in zip(lj, tj)
-        ])
-
-        same_triple_mask |= (cross_lang & i_in_triple & j_in_triple)
+    # A pair (triu_i[k], triu_j[k]) is a same-triple cross-language pair iff:
+    #   - cross_lang[k] is True (different languages)
+    #   - both samples are assigned to the same valid triple (triple_id >= 0)
+    #   - and that triple is the same triple for both samples
+    id_i = triple_id_vec[triu_i]
+    id_j = triple_id_vec[triu_j]
+    same_triple_mask = cross_lang & (id_i >= 0) & (id_i == id_j)
 
     dists_upper = distance_matrix[triu_i, triu_j]
     same_triple_dists = dists_upper[same_triple_mask]
@@ -1313,6 +1332,13 @@ def permutation_test_per_term(
     The two-tailed p-value formula is consistent with ``permutation_test_per_domain``
     (Phipson & Smyth 2010).
     """
+    # Defensive reset_index: callers that pass a metadata_df after .iloc[start:]
+    # slicing get a non-zero-based or non-contiguous index.  group.index.to_numpy()
+    # returns label values, not positions — which would be used as positional
+    # numpy indices, causing IndexError or silent row-shuffling corruption.
+    # Resetting to 0-based here is safe and matches russian_blue_zoom's pattern.
+    metadata_df = metadata_df.reset_index(drop=True)
+
     rng = np.random.default_rng(seed)
 
     observed = per_term_test_statistic(
