@@ -532,6 +532,9 @@ def compute_per_head_distances(
     np.ndarray of float32
         Shape ``(N, N, len(dims))`` where ``N = len(sample_indices)``.
         The last axis indexes homology dimensions in the same order as ``dims``.
+        The matrix is symmetrized in float64 before downcasting (giotto-tda's
+        parallel implementation can introduce ~1e-4 asymmetry in the output;
+        downstream consumers expect ``D[i, j] == D[j, i]`` exactly).
     """
     from gtda.diagrams import PairwiseDistance  # deferred to avoid top-level import cost
 
@@ -547,6 +550,10 @@ def compute_per_head_distances(
     )
 
     result = pd_obj.fit_transform(giotto_diagrams)  # shape (N, N, n_dims), float64
+
+    # Enforce mathematical symmetry. giotto-tda's parallel computation produces
+    # D[i,j] != D[j,i] up to ~1e-4 in float32; symmetrize in float64 first.
+    result = 0.5 * (result + np.swapaxes(result, 0, 1))
 
     return result.astype(np.float32)
 

@@ -246,6 +246,30 @@ class TestComputePerHeadDistances:
         )
         assert (result >= 0).all(), "Distance matrix has negative entries"
 
+    def test_bottleneck_metric(self):
+        """Bottleneck metric path: shape, dtype, symmetry, zero diagonal, nonnegative.
+
+        The CLI runs both metrics by default; without a direct test, a regression
+        in the bottleneck code path (e.g., metric_params handling) would be invisible.
+        """
+        _require_import()
+        n = 6
+        diagrams = _make_synthetic_per_layer_head_diagrams(n_layers=1, n_heads=1, n_samples=n)
+        indices = np.arange(n)
+        result = compute_per_head_distances(
+            diagrams, indices, layer=0, head=0,
+            metric="bottleneck", dims=(0, 1),
+        )
+        assert result.shape == (n, n, 2), f"Expected (N, N, 2), got {result.shape}"
+        assert result.dtype == np.float32, f"Expected float32, got {result.dtype}"
+        assert (result >= 0).all(), "Bottleneck distance matrix has negative entries"
+        for d in range(result.shape[2]):
+            mat = result[:, :, d]
+            np.testing.assert_allclose(mat, mat.T, atol=1e-5,
+                err_msg=f"Bottleneck not symmetric for dim index {d}")
+            np.testing.assert_allclose(np.diag(mat), 0.0, atol=1e-6,
+                err_msg=f"Bottleneck diagonal not zero for dim index {d}")
+
 
 # ---------------------------------------------------------------------------
 # compute_full_distance_tensor tests
@@ -464,13 +488,13 @@ def test_integration_tiny_synthetic_run(tmp_path):
     assert result.shape == (n, n, len(dims))
     assert result.dtype == np.float32
 
-    # Symmetry and zero diagonal. Tolerance is looser than the unit-level
-    # symmetry check (1e-5 at N=8) because giotto-tda's parallel Wasserstein
-    # produces small float32 asymmetries that grow with sample count; at N=20
-    # the observed max |D[i,j]-D[j,i]| is ~9e-5.
+    # Symmetry and zero diagonal. compute_per_head_distances symmetrizes in
+    # float64 before downcasting, so D[i,j] == D[j,i] should hold exactly in
+    # float32 — atol=0.0 would also pass but a tiny atol guards against any
+    # future numeric tweaks.
     for d in range(len(dims)):
         mat = result[:, :, d]
-        np.testing.assert_allclose(mat, mat.T, atol=1e-4)
+        np.testing.assert_allclose(mat, mat.T, atol=1e-7)
         np.testing.assert_allclose(np.diag(mat), 0.0, atol=1e-6)
 
     # Cache round-trip

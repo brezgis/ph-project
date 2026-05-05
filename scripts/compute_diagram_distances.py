@@ -85,7 +85,7 @@ _SENTINEL_GLOB = "{lang}_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilin
 
 
 def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
-    """Assert that all 9 expected barcode sentinel files exist.
+    """Assert that the 3 expected barcode sentinel files exist (one per lang).
 
     Aborts with a clear error message if the full ripser run is incomplete.
     """
@@ -105,7 +105,7 @@ def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
         )
         sys.exit(1)
 
-    logger.info("Pre-flight check passed — all 9 sentinel files present.")
+    logger.info("Pre-flight check passed — all 3 sentinel files present.")
 
 
 def _load_combined_barcodes(
@@ -122,7 +122,6 @@ def _load_combined_barcodes(
     """
     all_diagrams: dict = {}
     all_metadata_parts: list[pd.DataFrame] = []
-    global_offset = 0
 
     for lang in LANGS:
         logger.info("Loading %s/%s barcodes from %s ...", lang, DOMAIN, barcode_dir)
@@ -138,14 +137,15 @@ def _load_combined_barcodes(
         n_lang = len(metadata)
         logger.info("  %s/%s: %d samples, %d terms", lang, DOMAIN, n_lang, metadata["term"].nunique())
 
-        # Merge diagrams: shift sample indices by global_offset so they don't collide
+        # Concatenate per-(layer, head) sample lists in LANGS order. The combined
+        # global sample index `i` corresponds to position `i` in every all_diagrams[key]
+        # list AND row `i` of combined_metadata after pd.concat below.
         for key, sample_list in diagrams.items():
             if key not in all_diagrams:
                 all_diagrams[key] = []
             all_diagrams[key].extend(sample_list)
 
         all_metadata_parts.append(metadata.reset_index(drop=True))
-        global_offset += n_lang
 
     combined_metadata = pd.concat(all_metadata_parts, ignore_index=True)
     logger.info("Combined metadata: %d samples across %d languages", len(combined_metadata), len(LANGS))
@@ -303,11 +303,11 @@ def main(argv: list[str] | None = None) -> None:
         logger.info("Smoke mode active — overriding to n_per_term=5, layer=0/head=0, metric=wasserstein.")
         args.n_per_term = 5
         args.metrics = "wasserstein"
-        smoke_layers = range(1)
-        smoke_heads = range(1)
+        layers_range = range(1)
+        heads_range = range(1)
     else:
-        smoke_layers = range(N_LAYERS)
-        smoke_heads = range(N_LAYERS)
+        layers_range = range(N_LAYERS)
+        heads_range = range(N_LAYERS)
 
     # Parse metrics and dims
     metrics = [m.strip() for m in args.metrics.split(",") if m.strip()]
@@ -357,8 +357,8 @@ def main(argv: list[str] | None = None) -> None:
             metric=metric,
             dims=dims,
             cache_dir=args.cache_dir,
-            layers=smoke_layers if args.smoke else range(N_LAYERS),
-            heads=smoke_heads if args.smoke else range(N_LAYERS),
+            layers=layers_range,
+            heads=heads_range,
             n_jobs=args.n_jobs,
             force=args.force,
         )
@@ -371,11 +371,20 @@ def main(argv: list[str] | None = None) -> None:
         logger.info("  %s: %.1fs (%.1f min)", metric, t, t / 60)
 
     if args.smoke:
+        # Pair-distance compute scales ~quadratically in N (samples per layer-head).
+        # Smoke fixes n_per_term=5; the default overnight run uses n_per_term=20,
+        # adding ~(20/5)**2 = 16x on top of the 144 (layer, head) sweep.
+        layer_head_factor = 144
+        n_scale_for_default = (20 / 5) ** 2
+        naive_min = total_elapsed / 60 * layer_head_factor
+        adjusted_min = naive_min * n_scale_for_default
         logger.info(
-            "Smoke run complete. Extrapolating to full sweep (12×12 layers/heads): "
-            "~%.0f min per metric, ~%.0f min total for %d metrics.",
-            total_elapsed / 60 * 144,
-            total_elapsed / 60 * 144 * len(metrics),
+            "Smoke run complete. Naive layer/head extrapolation: ~%.0f min per metric "
+            "(layer-head sweep only). Adjusting for default n_per_term=20 vs smoke=5 "
+            "(quadratic in N): ~%.0f min per metric, ~%.0f min total for %d metrics.",
+            naive_min,
+            adjusted_min,
+            adjusted_min * len(metrics),
             len(metrics),
         )
 
