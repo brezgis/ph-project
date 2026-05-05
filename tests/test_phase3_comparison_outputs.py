@@ -71,11 +71,14 @@ def test_summary_csv_columns():
 
 
 def test_summary_csv_has_rows():
-    """Summary CSV must have at least one row (one per (feature_type × pair))."""
+    """Summary CSV must have at least one row per expected pair (catches partial runs)."""
     if not SUMMARY_CSV.exists():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
-    assert len(df) > 0, "summary CSV is empty"
+    assert len(df) >= len(EXPECTED_PAIRS), (
+        f"summary CSV has {len(df)} rows; expected at least {len(EXPECTED_PAIRS)} "
+        f"(one per pair: {EXPECTED_PAIRS})."
+    )
 
 
 def test_summary_csv_pairs():
@@ -84,7 +87,7 @@ def test_summary_csv_pairs():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "pair" not in df.columns:
-        pytest.skip("'pair' column absent — summary CSV missing required column")
+        _skip_or_fail("'pair' column absent — summary CSV missing required column")
     found_pairs = set(df["pair"].unique())
     assert EXPECTED_PAIRS <= found_pairs, (
         f"Expected language pairs {EXPECTED_PAIRS} not all found in summary CSV. "
@@ -98,7 +101,7 @@ def test_summary_csv_thresholds_feature_type():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "feature_type" not in df.columns:
-        pytest.skip("'feature_type' column absent")
+        _skip_or_fail("'feature_type' column absent")
     found = set(df["feature_type"].unique())
     assert "thresholds" in found, (
         f"'thresholds' feature type missing from summary CSV. Found: {found}"
@@ -111,7 +114,7 @@ def test_summary_csv_no_nan_in_perm_p():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "perm_p_value" not in df.columns:
-        pytest.skip("'perm_p_value' column absent")
+        _skip_or_fail("'perm_p_value' column absent")
     n_nan = df["perm_p_value"].isna().sum()
     assert n_nan == 0, (
         f"{n_nan} NaN values found in 'perm_p_value' column — "
@@ -125,7 +128,7 @@ def test_summary_csv_perm_p_in_range():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "perm_p_value" not in df.columns:
-        pytest.skip("'perm_p_value' column absent")
+        _skip_or_fail("'perm_p_value' column absent")
     bad = df[(df["perm_p_value"] < 0) | (df["perm_p_value"] > 1)]
     assert len(bad) == 0, (
         f"{len(bad)} rows have perm_p_value outside [0, 1]:\n{bad}"
@@ -138,7 +141,7 @@ def test_summary_csv_n_sig_features_nonneg():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "n_sig_features_q05" not in df.columns:
-        pytest.skip("'n_sig_features_q05' column absent")
+        _skip_or_fail("'n_sig_features_q05' column absent")
     bad = df[df["n_sig_features_q05"] < 0]
     assert len(bad) == 0, (
         f"{len(bad)} rows have negative n_sig_features_q05."
@@ -156,7 +159,7 @@ def test_summary_csv_obs_dist_finite():
         _skip_or_fail(f"summary CSV not yet produced: {SUMMARY_CSV}")
     df = pd.read_csv(SUMMARY_CSV)
     if "perm_obs_dist" not in df.columns:
-        pytest.skip("'perm_obs_dist' column absent")
+        _skip_or_fail("'perm_obs_dist' column absent")
     bad = df[~np.isfinite(df["perm_obs_dist"])]
     assert len(bad) == 0, (
         f"{len(bad)} rows have non-finite perm_obs_dist (inf or nan): "
@@ -181,12 +184,3 @@ def test_figure_exists(fname):
     )
 
 
-# ---------------------------------------------------------------------------
-# Smoke test: notebook output directory
-# ---------------------------------------------------------------------------
-
-def test_comparison_dir_exists():
-    """results/phase3_comparison/ must exist after notebook execution."""
-    if not COMP_DIR.exists():
-        _skip_or_fail(f"results/phase3_comparison/ directory not yet created: {COMP_DIR}")
-    assert COMP_DIR.is_dir()
