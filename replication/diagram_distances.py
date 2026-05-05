@@ -1376,6 +1376,100 @@ def permutation_test_per_term(
     }
 
 
+# ---------------------------------------------------------------------------
+# Per-head signal aggregation helpers (blr.5)
+# ---------------------------------------------------------------------------
+
+def rank_heads_by_effect(
+    per_head_results_df: pd.DataFrame,
+    top_k: int = 20,
+) -> pd.DataFrame:
+    """Rank (layer, head) cells by absolute effect size, descending.
+
+    Consumes the DataFrame produced by ``permutation_test_per_head`` and
+    returns the top-K rows sorted by ``|effect_size|`` descending.  A
+    ``rank`` column (1-indexed) is prepended.
+
+    Parameters
+    ----------
+    per_head_results_df:
+        DataFrame with at least columns
+        ``[layer, head, observed, p_value, effect_size, passes_bh]``
+        as returned by ``permutation_test_per_head``.
+    top_k:
+        Number of rows to return.  If ``top_k`` exceeds the number of rows
+        in ``per_head_results_df``, all rows are returned.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``[rank, layer, head, observed, p_value, effect_size, passes_bh]``
+        (same column set as input plus ``rank``).  Exactly
+        ``min(top_k, len(per_head_results_df))`` rows, sorted by
+        ``|effect_size|`` descending.  Index is reset (0-based).
+
+    Notes
+    -----
+    The ``rank`` column is assigned after sorting: rank 1 = largest
+    ``|effect_size|``, rank 2 = second largest, etc.  The column is
+    prepended (first column) for readability in the notebook table.
+    """
+    df = per_head_results_df.copy()
+    df = df.sort_values(
+        by="effect_size",
+        key=lambda s: s.abs(),
+        ascending=False,
+    ).reset_index(drop=True)
+
+    n = min(top_k, len(df))
+    df = df.iloc[:n].copy().reset_index(drop=True)
+    df.insert(0, "rank", range(1, n + 1))
+
+    return df
+
+
+def effect_heatmap_data(
+    per_head_results_df: pd.DataFrame,
+) -> np.ndarray:
+    """Pivot per-head results into a 12×12 layer×head matrix of effect sizes.
+
+    Rows are layers (0-based), columns are heads (0-based).  Cells not
+    present in ``per_head_results_df`` are filled with ``NaN`` — a defensive
+    guard that should never be triggered by the normal pipeline but protects
+    downstream callers from silent errors if the input DataFrame is a partial
+    result.
+
+    Parameters
+    ----------
+    per_head_results_df:
+        DataFrame with at least columns ``[layer, head, effect_size]``
+        as returned by ``permutation_test_per_head``.
+
+    Returns
+    -------
+    np.ndarray of float64
+        Shape ``(12, 12)``.  ``result[layer, head]`` is the effect size for
+        that ``(layer, head)`` cell, or ``NaN`` if the cell is missing from
+        the input.
+
+    Notes
+    -----
+    The 12×12 dimensions are hard-coded to match the mBERT architecture
+    (12 encoder layers, 12 attention heads per layer).  Using ``pivot_table``
+    with ``fill_value=NaN`` and then reindexing ensures both that the output
+    always has the expected shape and that missing cells surface as ``NaN``
+    rather than raising a ``KeyError``.
+    """
+    mat = np.full((12, 12), np.nan, dtype=np.float64)
+
+    for _, row in per_head_results_df.iterrows():
+        layer = int(row["layer"])
+        head = int(row["head"])
+        mat[layer, head] = float(row["effect_size"])
+
+    return mat
+
+
 def russian_blue_zoom(
     distance_matrix: np.ndarray,
     metadata_df: pd.DataFrame,
