@@ -5,12 +5,19 @@ Covers:
   - effect_heatmap_data: shape (12, 12), layer/head indexing, missing cells → NaN
 
 Uses deterministic synthetic DataFrames; no real-data dependencies.
+
+PH_REQUIRE_DIAGRAM_DISTANCES=1 flips skips into hard failures, mirroring the
+pattern in test_diagram_distances_perm.py and test_diagram_distances_per_term.py.
 """
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import pandas as pd
 import pytest
+
+REQUIRE = os.environ.get("PH_REQUIRE_DIAGRAM_DISTANCES") == "1"
 
 # ---------------------------------------------------------------------------
 # Conditional import — tests must fail (ImportError) before Phase 2
@@ -23,6 +30,12 @@ try:
     _IMPORT_OK = True
 except ImportError:
     _IMPORT_OK = False
+
+
+def _skip_or_fail(reason: str) -> None:
+    if REQUIRE:
+        pytest.fail(reason + " (PH_REQUIRE_DIAGRAM_DISTANCES=1)")
+    pytest.skip(reason)
 
 
 def _require_import():
@@ -181,6 +194,43 @@ class TestRankHeadsByEffect:
             f"Expected {len(df)} rows when top_k > len(df), got {len(result)}"
         )
 
+    def test_top_k_zero_returns_empty(self):
+        """top_k=0 returns an empty DataFrame with the rank column present."""
+        _require_import()
+        df = _make_small_df()
+        result = rank_heads_by_effect(df, top_k=0)
+        assert len(result) == 0, f"Expected 0 rows for top_k=0, got {len(result)}"
+        assert "rank" in result.columns, (
+            f"'rank' column missing from empty result. Columns: {list(result.columns)}"
+        )
+
+    def test_empty_dataframe(self):
+        """Empty input DataFrame returns an empty result without error."""
+        _require_import()
+        df = pd.DataFrame(
+            columns=["layer", "head", "observed", "p_value", "effect_size", "passes_bh"]
+        )
+        df["passes_bh"] = df["passes_bh"].astype(bool)
+        result = rank_heads_by_effect(df, top_k=5)
+        assert len(result) == 0, f"Expected 0 rows for empty input, got {len(result)}"
+        assert "rank" in result.columns
+
+    def test_ties_produce_contiguous_ranks(self):
+        """Ties in |effect_size| still yield a contiguous 1..N rank column."""
+        _require_import()
+        # Two rows with identical |effect_size|=3.0 (one positive, one negative)
+        rows = [
+            {"layer": 0, "head": 0, "observed": 0.1, "p_value": 0.01, "effect_size":  3.0, "passes_bh": True},
+            {"layer": 0, "head": 1, "observed": 0.2, "p_value": 0.02, "effect_size": -3.0, "passes_bh": True},
+            {"layer": 1, "head": 0, "observed": 0.3, "p_value": 0.10, "effect_size":  1.0, "passes_bh": False},
+        ]
+        df = pd.DataFrame(rows)
+        df["passes_bh"] = df["passes_bh"].astype(bool)
+        result = rank_heads_by_effect(df, top_k=3)
+        assert result["rank"].tolist() == [1, 2, 3], (
+            f"Tied |effect_size| should still produce ranks [1,2,3], got {result['rank'].tolist()}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # effect_heatmap_data tests
@@ -278,3 +328,45 @@ class TestEffectHeatmapData:
             assert actual == pytest.approx(expected, abs=1e-6), (
                 f"Mismatch at result[{layer}, {head}]: {actual} != {expected}"
             )
+
+    def test_empty_dataframe_yields_all_nan(self):
+        """Empty input DataFrame produces a (12, 12) array of all NaN."""
+        _require_import()
+        df = pd.DataFrame(
+            columns=["layer", "head", "observed", "p_value", "effect_size", "passes_bh"]
+        )
+        result = effect_heatmap_data(df)
+        assert result.shape == (12, 12)
+        assert np.isnan(result).all(), (
+            f"Expected all NaN for empty input, got {(~np.isnan(result)).sum()} non-NaN cells"
+        )
+
+    def test_out_of_range_layer_raises(self):
+        """A layer index ≥ 12 raises IndexError (fail-loud guard for non-mBERT inputs)."""
+        _require_import()
+        df = pd.DataFrame([
+            {"layer": 12, "head": 0, "observed": 0.1, "p_value": 0.01, "effect_size": 1.0, "passes_bh": False},
+        ])
+        with pytest.raises(IndexError):
+            effect_heatmap_data(df)
+
+    def test_out_of_range_head_raises(self):
+        """A head index ≥ 12 raises IndexError."""
+        _require_import()
+        df = pd.DataFrame([
+            {"layer": 0, "head": 12, "observed": 0.1, "p_value": 0.01, "effect_size": 1.0, "passes_bh": False},
+        ])
+        with pytest.raises(IndexError):
+            effect_heatmap_data(df)
+
+    def test_duplicate_layer_head_last_write_wins(self):
+        """Duplicate (layer, head) rows take the last value (documented behavior)."""
+        _require_import()
+        df = pd.DataFrame([
+            {"layer": 5, "head": 3, "observed": 0.1, "p_value": 0.01, "effect_size": 1.0, "passes_bh": True},
+            {"layer": 5, "head": 3, "observed": 0.2, "p_value": 0.02, "effect_size": 9.9, "passes_bh": False},
+        ])
+        result = effect_heatmap_data(df)
+        assert float(result[5, 3]) == pytest.approx(9.9), (
+            f"Expected last value 9.9 to win, got {result[5, 3]}"
+        )

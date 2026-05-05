@@ -1455,10 +1455,13 @@ def effect_heatmap_data(
     Notes
     -----
     The 12×12 dimensions are hard-coded to match the mBERT architecture
-    (12 encoder layers, 12 attention heads per layer).  Using ``pivot_table``
-    with ``fill_value=NaN`` and then reindexing ensures both that the output
-    always has the expected shape and that missing cells surface as ``NaN``
-    rather than raising a ``KeyError``.
+    (12 encoder layers, 12 attention heads per layer).  The matrix is
+    pre-filled with ``NaN`` via ``np.full`` and then populated by iterating
+    rows; cells absent from the input therefore surface as ``NaN`` rather
+    than raising a ``KeyError``.  Layer/head indices outside ``[0, 12)`` will
+    raise ``IndexError`` from numpy — a deliberate fail-loud guard, since
+    such indices indicate a non-mBERT input.  Duplicate ``(layer, head)``
+    rows fall through with last-write-wins semantics.
     """
     mat = np.full((12, 12), np.nan, dtype=np.float64)
 
