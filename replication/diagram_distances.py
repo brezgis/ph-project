@@ -79,6 +79,8 @@ import time
 import warnings
 from typing import Optional, Union
 
+import yaml
+
 import numpy as np
 import pandas as pd
 
@@ -1004,3 +1006,485 @@ def permutation_test_per_head(
     df["passes_bh"] = reject_mask.astype(bool)
 
     return df.reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Per-term permutation test helpers (blr.4)
+# ---------------------------------------------------------------------------
+
+def _normalize_gloss(g: str) -> str:
+    """Strip "dark " and "light " prefixes and lowercase, for YAML gloss join keys.
+
+    This is the canonical join key for the Russian blue split:
+    ``_normalize_gloss("dark blue")  → "blue"``
+    ``_normalize_gloss("light blue") → "blue"``
+
+    Without this normalisation, a naive merge on ``gloss == en_term`` silently
+    drops **both** Russian blue BCTs (синий and голубой) from the translation
+    table, leaving 10 rows instead of the correct 12.
+
+    The function is idempotent: applying it twice yields the same result as
+    applying it once.
+
+    Parameters
+    ----------
+    g:
+        Raw gloss string from a YAML entry (e.g. ``"dark blue"``, ``"purple"``).
+
+    Returns
+    -------
+    str
+        Lowercased gloss with ``"dark "`` or ``"light "`` prefix removed.
+    """
+    g = g.lower()
+    if g.startswith("dark "):
+        g = g[len("dark "):]
+    elif g.startswith("light "):
+        g = g[len("light "):]
+    return g
+
+
+def load_translation_triples(
+    canon_dir: Union[str, pathlib.Path],
+    domain: str = "color",
+) -> pd.DataFrame:
+    """Load cross-linguistic translation triples from canon-term YAMLs.
+
+    Reads ``<canon_dir>/en/<domain>.yaml``, ``<canon_dir>/ru/<domain>.yaml``,
+    and ``<canon_dir>/es/<domain>.yaml`` and builds a cross-linguistic
+    translation table.
+
+    ## Column layout
+
+    ``[en_term, ru_term, es_term, ru_gloss_raw]``
+
+    - ``en_term`` — English BCT string (e.g. ``"blue"``).
+    - ``ru_term`` — Russian BCT string (e.g. ``"синий"`` or ``"голубой"``).
+    - ``es_term`` — Spanish BCT string (e.g. ``"azul"``).
+    - ``ru_gloss_raw`` — the raw Russian gloss as written in the YAML (e.g.
+      ``"dark blue"``); preserves ``"dark blue"``/``"light blue"`` for
+      downstream interpretation without stripping.
+
+    ## Russian-blue duplication
+
+    For the color domain, both Russian blue BCTs share the same normalized
+    gloss (``"blue"``), so the join produces **two rows** for ``en_term="blue"``:
+
+        en_term=blue  ru_term=синий    es_term=azul  ru_gloss_raw="dark blue"
+        en_term=blue  ru_term=голубой  es_term=azul  ru_gloss_raw="light blue"
+
+    This duplication is intentional and documented.  The color domain therefore
+    produces exactly **12 rows** (10 one-to-one triples + 2 for blue).
+
+    ## Join logic
+
+    For each English term ``t``:
+      - Find all Russian entries where ``_normalize_gloss(entry["gloss"]) == t``.
+        Produces one match for all non-blue terms; two matches for "blue".
+      - Find the Spanish entry where ``_normalize_gloss(entry["gloss"]) == t``.
+        Expected to be exactly one match.
+      - Emit one row per (Russian match, Spanish match) combination.
+
+    Parameters
+    ----------
+    canon_dir:
+        Root of the canon-terms directory tree.  Expected layout:
+        ``<canon_dir>/<lang>/<domain>.yaml``.
+    domain:
+        Domain slug (``"color"`` for the May 2026 scope).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``[en_term, ru_term, es_term, ru_gloss_raw]``.
+        For the color domain, exactly 12 rows.
+
+    Raises
+    ------
+    FileNotFoundError
+        If any of the three YAML files are missing.
+    ValueError
+        If a Spanish term has no matching English entry via normalized gloss,
+        or if an English term has no Spanish counterpart.
+    """
+    canon_dir = pathlib.Path(canon_dir)
+
+    def _load_yaml(lang: str) -> list[dict]:
+        path = canon_dir / lang / f"{domain}.yaml"
+        if not path.exists():
+            raise FileNotFoundError(f"Canon-term YAML not found: {path}")
+        with path.open("r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        return data.get("terms", [])
+
+    en_terms_raw = _load_yaml("en")
+    ru_terms_raw = _load_yaml("ru")
+    es_terms_raw = _load_yaml("es")
+
+    # English: term only (no gloss field)
+    # The en_term itself IS the canonical gloss key.
+    en_list = [entry["term"] for entry in en_terms_raw]
+
+    # Russian: build a map from normalized gloss → list of (term, raw_gloss) tuples
+    # Multiple entries can share the same normalized gloss (синий + голубой → "blue").
+    ru_by_norm: dict[str, list[tuple[str, str]]] = {}
+    for entry in ru_terms_raw:
+        raw_gloss = entry.get("gloss", entry["term"])
+        norm = _normalize_gloss(raw_gloss)
+        ru_by_norm.setdefault(norm, []).append((entry["term"], raw_gloss))
+
+    # Spanish: build a map from normalized gloss → term
+    # Expected to be 1:1 with English for all color BCTs.
+    es_by_norm: dict[str, str] = {}
+    for entry in es_terms_raw:
+        raw_gloss = entry.get("gloss", entry["term"])
+        norm = _normalize_gloss(raw_gloss)
+        es_by_norm[norm] = entry["term"]
+
+    rows = []
+    for en_term in en_list:
+        # Russian matches (may be >1 for "blue")
+        ru_matches = ru_by_norm.get(en_term, [])
+        # Spanish match (expected exactly 1)
+        es_term = es_by_norm.get(en_term)
+
+        for ru_term, ru_gloss_raw in ru_matches:
+            rows.append({
+                "en_term": en_term,
+                "ru_term": ru_term,
+                "es_term": es_term,
+                "ru_gloss_raw": ru_gloss_raw,
+            })
+
+    return pd.DataFrame(rows, columns=["en_term", "ru_term", "es_term", "ru_gloss_raw"])
+
+
+def per_term_test_statistic(
+    distance_matrix: np.ndarray,
+    metadata_df: pd.DataFrame,
+    triples_df: pd.DataFrame,
+    ru_blue_choice: str = "синий",
+) -> float:
+    """Compute the mean cross-language same-triple distance over all translation triples.
+
+    For each row in ``triples_df``, this function identifies all sample pairs
+    ``(i, j)`` where sample ``i`` and sample ``j`` are from **different languages**
+    and their ``(lang, term)`` matches the triple's languages and terms.  The
+    test statistic is the mean distance over all such cross-language same-triple
+    pairs.
+
+    **Within-language pairs are excluded by design.**  A "translation cluster"
+    is defined by cross-language proximity; within-language similarity is
+    irrelevant to this test.
+
+    Parameters
+    ----------
+    distance_matrix:
+        Square float array of shape ``(N, N)``.  Pairwise distances.
+    metadata_df:
+        DataFrame with ``'lang'`` and ``'term'`` columns.  ``N`` rows.
+    triples_df:
+        DataFrame with columns ``[en_term, ru_term, es_term, ru_gloss_raw]``
+        as returned by ``load_translation_triples``.  Each row defines one
+        translation triple.
+    ru_blue_choice:
+        Which Russian blue to use for the ``en_term == "blue"`` row.
+        Must be one of ``{'синий', 'голубой'}``.  Selects the matching row
+        from ``triples_df`` when there are two blue rows.
+
+    Returns
+    -------
+    float
+        Mean distance over all cross-language same-triple sample pairs.
+
+    Notes
+    -----
+    The ``ru_blue_choice`` parameter resolves the ambiguity introduced by the
+    Russian-blue duplication in ``triples_df``.  When the caller supplies a
+    triples_df that already has exactly one blue row (because they pre-filtered
+    to sinij or goluboy), this parameter is still safe to pass and will be
+    consistent with that row.
+    """
+    lang_vec = metadata_df["lang"].values
+    term_vec = metadata_df["term"].values
+    n = len(lang_vec)
+
+    triu_i, triu_j = np.triu_indices(n, k=1)
+
+    # Build a boolean mask: True where both samples belong to the same triple
+    # and are from different languages.
+    same_triple_mask = np.zeros(len(triu_i), dtype=bool)
+
+    for _, row in triples_df.iterrows():
+        # If this row is a blue row and there are two blue rows (the duplication case),
+        # pick the one matching ru_blue_choice.
+        if row["en_term"] == "blue":
+            # Identify if there are multiple blue rows
+            blue_rows = triples_df[triples_df["en_term"] == "blue"]
+            if len(blue_rows) > 1 and row["ru_term"] != ru_blue_choice:
+                continue  # skip the non-chosen blue variant
+
+        triple_lang_to_term = {
+            "en": row["en_term"],
+            "ru": row["ru_term"],
+            "es": row["es_term"],
+        }
+
+        # For each pair (triu_i[k], triu_j[k]), check if they form a cross-language
+        # same-triple pair.
+        li = lang_vec[triu_i]
+        lj = lang_vec[triu_j]
+        ti = term_vec[triu_i]
+        tj = term_vec[triu_j]
+
+        cross_lang = li != lj
+
+        # Check triple membership: sample i matches triple's lang+term, and so does j
+        i_in_triple = np.array([
+            triple_lang_to_term.get(l, None) == t
+            for l, t in zip(li, ti)
+        ])
+        j_in_triple = np.array([
+            triple_lang_to_term.get(l, None) == t
+            for l, t in zip(lj, tj)
+        ])
+
+        same_triple_mask |= (cross_lang & i_in_triple & j_in_triple)
+
+    dists_upper = distance_matrix[triu_i, triu_j]
+    same_triple_dists = dists_upper[same_triple_mask]
+
+    if len(same_triple_dists) == 0:
+        return 0.0
+
+    return float(same_triple_dists.mean())
+
+
+def permutation_test_per_term(
+    distance_matrix: np.ndarray,
+    metadata_df: pd.DataFrame,
+    triples_df: pd.DataFrame,
+    K: int = 10000,
+    seed: int = 42,
+    ru_blue_choice: str = "синий",
+) -> dict:
+    """Permutation test: do translation triples form proximity clusters?
+
+    Shuffles term labels WITHIN each language ``K`` times and recomputes
+    ``per_term_test_statistic`` to build the null distribution.  Language
+    labels are never shuffled — only term labels within each language group
+    change, so cross-language pair membership changes while within-language
+    structure is preserved.
+
+    Parameters
+    ----------
+    distance_matrix:
+        Square float array of shape ``(N, N)``.
+    metadata_df:
+        DataFrame with ``'lang'`` and ``'term'`` columns.  ``N`` rows.
+    triples_df:
+        Translation triple table from ``load_translation_triples``.
+    K:
+        Number of permutations.  Default 10000.
+    seed:
+        Random seed for ``np.random.default_rng``.  Default 42.
+    ru_blue_choice:
+        Which Russian blue to use in ``per_term_test_statistic``.
+        Default ``'синий'``.
+
+    Returns
+    -------
+    dict with keys:
+        - ``'observed'`` (float): test statistic on original labels.
+        - ``'null'`` (np.ndarray, shape ``(K,)``): null distribution.
+        - ``'p_value'`` (float): two-tailed Phipson–Smyth correction
+          ``(|null − mean(null)| ≥ |observed − mean(null)| + 1) / (K + 1)``.
+        - ``'effect_size'`` (float): z-score under null.
+
+    Notes
+    -----
+    The permutation shuffles term labels within each language group.
+    Concretely: for each language ``l``, the subset of ``metadata_df`` rows
+    where ``lang == l`` has its ``term`` column permuted independently of
+    other languages.  This preserves the number of samples per language but
+    randomizes which sample belongs to which term — destroying the within-triple
+    signal while keeping the language structure intact.
+
+    The two-tailed p-value formula is consistent with ``permutation_test_per_domain``
+    (Phipson & Smyth 2010).
+    """
+    rng = np.random.default_rng(seed)
+
+    observed = per_term_test_statistic(
+        distance_matrix, metadata_df, triples_df, ru_blue_choice=ru_blue_choice
+    )
+
+    null = np.empty(K, dtype=np.float64)
+    for k in range(K):
+        # Shuffle term labels within each language independently
+        perm_terms = metadata_df["term"].values.copy()
+        for lang, group in metadata_df.groupby("lang"):
+            idx = group.index.to_numpy()
+            perm_terms[idx] = rng.permutation(perm_terms[idx])
+
+        perm_meta = metadata_df.copy()
+        perm_meta["term"] = perm_terms
+
+        null[k] = per_term_test_statistic(
+            distance_matrix, perm_meta, triples_df, ru_blue_choice=ru_blue_choice
+        )
+
+    null_mean = null.mean()
+    null_std = null.std()
+
+    extreme_count = int(np.sum(np.abs(null - null_mean) >= np.abs(observed - null_mean)))
+    p_value = (extreme_count + 1) / (K + 1)
+
+    effect_size = float((observed - null_mean) / null_std) if null_std > 1e-10 else 0.0
+
+    return {
+        "observed": float(observed),
+        "null": null,
+        "p_value": float(p_value),
+        "effect_size": float(effect_size),
+    }
+
+
+def russian_blue_zoom(
+    distance_matrix: np.ndarray,
+    metadata_df: pd.DataFrame,
+    K: int = 10000,
+    seed: int = 42,
+) -> dict:
+    """Within-Russian zoom test: is the синий/голубой split detectable?
+
+    Asks whether mBERT attention topology *within Russian* encodes the
+    obligatory sinij/голубой distinction that Russian grammar requires.
+    This is a sharper test than the triple test: the triple test asks
+    "do translations cluster?"; this asks "does the language-internal
+    blue split show up as above-average distance in attention topology?"
+
+    ## Statistic
+
+    Computed on the **Russian-language subset** of ``metadata_df``
+    (rows where ``lang == 'ru'``):
+
+        stat = mean d(синий samples, голубой samples)
+               − median over all (a, b) where {a, b} ≠ {синий, голубой}
+                 of mean d(samples with term=a, samples with term=b)
+
+    A positive statistic means синий and голубой are farther apart (in W_2
+    attention topology) than the typical Russian color-pair distance.  The
+    prediction from Paramei (2005) and Winawer et al. (2007) is that
+    ``observed > 0``.
+
+    ## Null distribution
+
+    Permute term labels within the Russian subset ``K`` times, recomputing
+    the statistic each time.
+
+    Parameters
+    ----------
+    distance_matrix:
+        Square float array of shape ``(N, N)``.  Covers all samples, all
+        languages.  This function extracts the Russian subset by index.
+    metadata_df:
+        DataFrame with ``'lang'`` and ``'term'`` columns.  ``N`` rows.
+    K:
+        Number of permutations.  Default 10000.
+    seed:
+        Random seed.  Default 42.
+
+    Returns
+    -------
+    dict with keys:
+        - ``'observed'`` (float): statistic on original labels.
+        - ``'null'`` (np.ndarray, shape ``(K,)``): null distribution.
+        - ``'p_value'`` (float): two-tailed Phipson–Smyth p-value.
+        - ``'effect_size'`` (float): z-score under null.
+
+    Notes
+    -----
+    The function sub-selects the Russian rows by position (iloc) from
+    ``metadata_df`` and slices the corresponding rows/cols from
+    ``distance_matrix``.  Only term labels within Russian are permuted;
+    the Russian subset size is unchanged.
+    """
+    rng = np.random.default_rng(seed)
+
+    # Extract Russian subset
+    ru_mask = metadata_df["lang"].values == "ru"
+    ru_indices = np.where(ru_mask)[0]  # positional indices
+
+    ru_meta = metadata_df.iloc[ru_indices].reset_index(drop=True)
+    ru_dist = distance_matrix[np.ix_(ru_indices, ru_indices)]
+
+    def _blue_stat(meta_sub: pd.DataFrame, dist_sub: np.ndarray) -> float:
+        """Compute the Russian-blues statistic on a sub-matrix."""
+        term_vec = meta_sub["term"].values
+        n = len(term_vec)
+        triu_i, triu_j = np.triu_indices(n, k=1)
+
+        # Get all unique Russian terms
+        all_terms = list(meta_sub["term"].unique())
+
+        # Find синий and голубой indices
+        sinij_idx = np.where(term_vec == "синий")[0]
+        goluboy_idx = np.where(term_vec == "голубой")[0]
+
+        if len(sinij_idx) == 0 or len(goluboy_idx) == 0:
+            # Can't compute if one blue is missing (shouldn't happen on real data)
+            return 0.0
+
+        # mean d(синий samples, голубой samples) — all cross-pair combinations
+        blue_pairs = np.array([
+            [i, j] for i in sinij_idx for j in goluboy_idx
+        ])
+        mean_blue = float(dist_sub[blue_pairs[:, 0], blue_pairs[:, 1]].mean())
+
+        # median over all (a, b) term pairs where {a, b} != {синий, голубой}
+        # of mean d(samples with a, samples with b)
+        pair_means = []
+        for k_a in range(len(all_terms)):
+            for k_b in range(k_a + 1, len(all_terms)):
+                ta, tb = all_terms[k_a], all_terms[k_b]
+                if {ta, tb} == {"синий", "голубой"}:
+                    continue
+                idx_a = np.where(term_vec == ta)[0]
+                idx_b = np.where(term_vec == tb)[0]
+                if len(idx_a) == 0 or len(idx_b) == 0:
+                    continue
+                cross = np.array([
+                    [i, j] for i in idx_a for j in idx_b
+                ])
+                pair_means.append(float(dist_sub[cross[:, 0], cross[:, 1]].mean()))
+
+        if len(pair_means) == 0:
+            return 0.0
+
+        median_other = float(np.median(pair_means))
+        return mean_blue - median_other
+
+    observed = _blue_stat(ru_meta, ru_dist)
+
+    null = np.empty(K, dtype=np.float64)
+    for k in range(K):
+        perm_terms = rng.permutation(ru_meta["term"].values)
+        perm_meta = ru_meta.copy()
+        perm_meta["term"] = perm_terms
+        null[k] = _blue_stat(perm_meta, ru_dist)
+
+    null_mean = null.mean()
+    null_std = null.std()
+
+    extreme_count = int(np.sum(np.abs(null - null_mean) >= np.abs(observed - null_mean)))
+    p_value = (extreme_count + 1) / (K + 1)
+
+    effect_size = float((observed - null_mean) / null_std) if null_std > 1e-10 else 0.0
+
+    return {
+        "observed": float(observed),
+        "null": null,
+        "p_value": float(p_value),
+        "effect_size": float(effect_size),
+    }
