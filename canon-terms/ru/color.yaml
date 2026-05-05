@@ -53,6 +53,7 @@ terms:
   - term: "фиолетовый"
     gloss: "purple"
     source: "Berlin & Kay 1969"
+    notes: "Under-target after the i6q multi-year news rescue (n=104 in 3M news, vs. the n≥150 acceptance threshold). Kept rather than dropped because it is a Berlin & Kay basic color term and n=104 is sufficient to compute mBERT attention graphs; downstream persistent-homology features for this term may be noisier than for the saturated (n=200) terms. Documented in CLAUDE.md \"Current scope (May 2026)\"; tracked in bd ph-project-bcy."
   - term: "розовый"
     gloss: "pink"
     source: "Berlin & Kay 1969"
