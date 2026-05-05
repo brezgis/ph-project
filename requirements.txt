@@ -27,6 +27,7 @@ scikit-learn
 scipy
 numpy<2
 pandas
+pyarrow  # parquet I/O for phase3 manifest (16v.2)
 
 # Visualization
 matplotlib
