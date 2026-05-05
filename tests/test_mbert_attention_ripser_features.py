@@ -6,20 +6,25 @@ iterates over (lang in {en, ru, es}) × (domain in {color}) — the May 2026
 rescoping restricted analysis to color only; see CLAUDE.md and bd show
 ph-project-mwk for the rescoping note.
 
-Ripser feature expected shape: (12, 12, 14, N_kwic)
-  - 12 layers × 12 heads × 14 ripser features × N_kwic sentences
+Ripser feature expected shape: (12, 12, N_kwic, 14)
+  - 12 layers × 12 heads × N_kwic sentences × 14 ripser features
   - 14 = len(ripser_feature_names) in cell 31 of mbert_attention_ripser.ipynb
+  - Axis order follows the substrate: cell 36 concatenates per-batch
+    (12, 12, n_batch, 14) arrays along axis=2 (samples), yielding
+    (12, 12, N_kwic, 14). Confirmed by reference/ripser_count.py
+    count_ripser_features → np.swapaxes(..., 0, 1) returning (samples, features).
   - N_kwic varies per (lang, domain): en/color ~2200, ru/color ~2267, es/color ~2161
 
 Template feature expected shape: (12, 12, 6, N_kwic)
   - 12 layers × 12 heads × 6 template features × N_kwic sentences
   - 6 = len(['self', 'beginning', 'prev', 'next', 'comma', 'dot'])
+  - calculate_features_t in cell 44 returns (layers, heads, n_features, samples);
+    cell 50 concatenates along axis=3 (samples).
 
-We do NOT assert the exact N_kwic dimension because the KWIC CSV may be
-regenerated with a different sample count. Instead we check that the shape
-prefix (12, 12, 14) or (12, 12, 6) is correct and that N_kwic matches the
-CSV row count exactly. The exact row count is read dynamically from the CSV
-so the assertion is always in sync with the data on disk.
+We do NOT assert the exact N_kwic dimension as a constant because the KWIC
+CSV may be regenerated with a different sample count. Instead we read N_kwic
+dynamically from the CSV row count, so the assertion is always in sync with
+the data on disk.
 
 By default, per-(lang, domain) checks skip when the .npy file is absent so
 local development stays green before the notebook has been run. Set
@@ -115,11 +120,12 @@ def _missing(lang: str, domain: str) -> None:
 
 @pytest.mark.parametrize("lang,domain", [(l, d) for l in LANGS for d in DOMAINS])
 def test_ripser_features_shape(lang, domain):
-    """Ripser feature tensor must have shape (12, 12, 14, N_kwic).
+    """Ripser feature tensor must have shape (12, 12, N_kwic, 14).
 
     N_kwic is read dynamically from the KWIC CSV so this assertion stays in
-    sync even if the CSV is regenerated. We check the prefix (12, 12, 14) and
-    that N_kwic matches the CSV row count exactly.
+    sync even if the CSV is regenerated. We check the prefix (12, 12), the
+    samples axis matches the CSV row count exactly, and the trailing feature
+    axis is 14 (= len(ripser_feature_names) in cell 31).
 
     Skips when the feature file does not yet exist (set PH_REQUIRE_FEATURES=1
     to turn skips into failures).
@@ -136,7 +142,7 @@ def test_ripser_features_shape(lang, domain):
     )
     arr = np.load(path, allow_pickle=True)
     n_kwic = _kwic_row_count(lang, domain)
-    expected_shape = (12, 12, RIPSER_N_FEATURES, n_kwic)
+    expected_shape = (12, 12, n_kwic, RIPSER_N_FEATURES)
     assert arr.shape == expected_shape, (
         f"({lang!r}, {domain!r}): expected ripser shape {expected_shape}, got {arr.shape}"
     )
@@ -162,7 +168,7 @@ def test_ripser_features_not_all_zero(lang, domain):
     if path is None:
         _missing(lang, domain)
     arr = np.load(path, allow_pickle=True)
-    # Shape: (12, 12, 14, N_kwic) — check that no (layer, head) slice is all-zero
+    # Shape: (12, 12, N_kwic, 14) — check that no (layer, head) slice is all-zero
     for layer in range(arr.shape[0]):
         for head in range(arr.shape[1]):
             slice_ = arr[layer, head]
