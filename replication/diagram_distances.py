@@ -752,3 +752,255 @@ def load_distance_tensor(
     homology_dimensions = tuple(int(d) for d in archive["homology_dimensions"])
 
     return tensor, metadata_df, metric, homology_dimensions
+
+
+# ---------------------------------------------------------------------------
+# Permutation test helpers
+# ---------------------------------------------------------------------------
+
+def per_domain_test_statistic(
+    distance_matrix: np.ndarray,
+    metadata_df: pd.DataFrame,
+) -> float:
+    """Compute mean(between-language distances) − mean(within-language distances).
+
+    The test statistic for the per-domain permutation test. A positive value
+    means between-language pairs are on average farther apart in persistence-
+    diagram space than within-language pairs — the direction predicted by the
+    hypothesis that languages encode distinct attentional topology.
+
+    Parameters
+    ----------
+    distance_matrix:
+        Square float array of shape ``(N, N)``. The pairwise distance matrix
+        for a single ``(layer, head)``.
+    metadata_df:
+        DataFrame with a ``'lang'`` column, one row per sample. Must have
+        ``N`` rows corresponding to the ``N`` samples in ``distance_matrix``.
+
+    Returns
+    -------
+    float
+        mean(between-language pair distances) − mean(within-language pair
+        distances). If either set of pairs is empty, the missing mean is
+        treated as 0.0.
+
+    Notes
+    -----
+    Uses the upper-triangle of the mask to avoid double-counting symmetric
+    pairs, consistent with the permutation null distribution computation.
+    The cross-language mask is built via broadcasting:
+    ``lang_vec[:, None] != lang_vec[None, :]``.
+    """
+    lang_vec = metadata_df["lang"].values
+    between_mask = lang_vec[:, None] != lang_vec[None, :]
+    within_mask = lang_vec[:, None] == lang_vec[None, :]
+
+    # Use upper-triangle only to avoid double-counting (diagonal excluded)
+    n = len(lang_vec)
+    triu_idx = np.triu_indices(n, k=1)
+
+    between_upper = between_mask[triu_idx]
+    within_upper = within_mask[triu_idx]
+
+    dists_upper = distance_matrix[triu_idx]
+
+    between_dists = dists_upper[between_upper]
+    within_dists = dists_upper[within_upper]
+
+    mean_between = float(between_dists.mean()) if len(between_dists) > 0 else 0.0
+    mean_within = float(within_dists.mean()) if len(within_dists) > 0 else 0.0
+
+    return mean_between - mean_within
+
+
+def permutation_test_per_domain(
+    distance_matrix: np.ndarray,
+    metadata_df: pd.DataFrame,
+    K: int = 10000,
+    seed: int = 42,
+) -> dict:
+    """Permutation test: are between-language distances larger than within-language?
+
+    Shuffles the ``lang`` label vector ``K`` times and recomputes the test
+    statistic (``per_domain_test_statistic``) each time to build the null
+    distribution. Returns the observed statistic, null distribution, two-tailed
+    p-value, and effect size (z-score under the null).
+
+    Parameters
+    ----------
+    distance_matrix:
+        Square float array of shape ``(N, N)``.
+    metadata_df:
+        DataFrame with a ``'lang'`` column, one row per sample. ``N`` rows.
+    K:
+        Number of permutations. Default 10000.
+    seed:
+        Random seed for ``np.random.default_rng``. Default 42.
+
+    Returns
+    -------
+    dict with keys:
+        - ``'observed'`` (float): test statistic on original labels.
+        - ``'null'`` (np.ndarray, shape ``(K,)``): null distribution.
+        - ``'p_value'`` (float): two-tailed p-value with finite-K correction
+          ``(sum(|null - mean(null)| >= |observed - mean(null)|) + 1) / (K + 1)``.
+        - ``'effect_size'`` (float): z-score under null,
+          ``(observed - mean(null)) / std(null)``.
+
+    Notes
+    -----
+    The permutation shuffles the **label vector** (length N), not the rows of
+    the distance matrix. This is the standard Mantel-style approach: the
+    distances are fixed; only the sample assignment to languages changes.
+
+    The two-tailed p-value formula uses the standard finite-K correction
+    (Phipson & Smyth 2010): ``(B + 1) / (K + 1)`` where B is the count of
+    null statistics at least as extreme as observed (in absolute deviation from
+    the null mean).
+    """
+    rng = np.random.default_rng(seed)
+    lang_vec = metadata_df["lang"].values.copy()
+    n = len(lang_vec)
+
+    observed = per_domain_test_statistic(distance_matrix, metadata_df)
+
+    null = np.empty(K, dtype=np.float64)
+    for k in range(K):
+        shuffled_langs = rng.permutation(lang_vec)
+        perm_meta = pd.DataFrame({"lang": shuffled_langs})
+        null[k] = per_domain_test_statistic(distance_matrix, perm_meta)
+
+    null_mean = null.mean()
+    null_std = null.std()
+
+    # Two-tailed p-value with finite-K correction
+    extreme_count = int(np.sum(np.abs(null - null_mean) >= np.abs(observed - null_mean)))
+    p_value = (extreme_count + 1) / (K + 1)
+
+    # Effect size: z-score under null
+    effect_size = float((observed - null_mean) / null_std) if null_std > 1e-10 else 0.0
+
+    return {
+        "observed": float(observed),
+        "null": null,
+        "p_value": float(p_value),
+        "effect_size": float(effect_size),
+    }
+
+
+def _bh_correction(
+    pvalues: np.ndarray,
+    alpha: float = 0.05,
+) -> np.ndarray:
+    """Benjamini-Hochberg FDR correction.
+
+    Returns a boolean mask of the same length: True where the hypothesis is
+    rejected at the given false discovery rate (``alpha``).
+
+    Implementation follows the standard BH step-up procedure:
+        1. Sort p-values ascending.
+        2. For rank k (1-indexed), the BH threshold is ``k/m * alpha``.
+        3. Find the largest k where ``p_(k) <= k/m * alpha``.
+        4. Reject all hypotheses with rank <= that k (step-up property).
+
+    Parameters
+    ----------
+    pvalues:
+        Array of p-values. Length ``m``.
+    alpha:
+        False discovery rate threshold. Default 0.05.
+
+    Returns
+    -------
+    np.ndarray of bool
+        Boolean mask, length ``m``. ``True`` = rejected (significant).
+
+    Notes
+    -----
+    Verbatim re-implementation of the ``_bh_correction`` helper in
+    ``notebooks/phase3_comparison.ipynb`` cell 11. Kept here so notebook
+    code can import it rather than redefining it inline.
+    """
+    pv = np.asarray(pvalues, dtype=float)
+    m = len(pv)
+    if m == 0:
+        return np.array([], dtype=bool)
+    order = np.argsort(pv)
+    thresholds = (np.arange(1, m + 1) / m) * alpha
+    # find the largest rank k where p_{(k)} <= threshold_k
+    sig_at_rank = pv[order] <= thresholds
+    # if any rank k is significant, all ranks <= k are also significant (step-up)
+    # cummax from the right enforces this monotonicity property
+    cummax_right = np.maximum.accumulate(sig_at_rank[::-1])[::-1]
+    reject_order = cummax_right
+    reject = np.zeros(m, dtype=bool)
+    reject[order] = reject_order
+    return reject
+
+
+def permutation_test_per_head(
+    distance_tensor: np.ndarray,
+    metadata_df: pd.DataFrame,
+    K: int = 10000,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Apply the per-domain permutation test independently for each (layer, head).
+
+    Runs ``permutation_test_per_domain`` for every ``(layer, head)`` cell in the
+    distance tensor and applies Benjamini-Hochberg FDR correction across all
+    ``n_layers * n_heads`` tests at q = 0.05.
+
+    Parameters
+    ----------
+    distance_tensor:
+        Float array of shape ``(n_layers, n_heads, N, N)``. The H_1 (or H_0)
+        sub-tensor sliced from the cached distance tensor.
+    metadata_df:
+        DataFrame with a ``'lang'`` column, one row per sample. ``N`` rows.
+    K:
+        Number of permutations per test. Default 10000.
+    seed:
+        Base random seed. Each ``(layer, head)`` uses ``seed + layer * n_heads + head``
+        to ensure independence across cells while remaining deterministic.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per ``(layer, head)``. Columns:
+        ``[layer, head, observed, p_value, effect_size, passes_bh]``.
+        ``passes_bh`` is a boolean column indicating BH rejection at q = 0.05.
+
+    Notes
+    -----
+    The BH correction is applied across all ``n_layers * n_heads`` tests
+    simultaneously (144 tests for the full 12×12 mBERT grid), not per-layer
+    or per-head independently.
+    """
+    n_layers, n_heads = distance_tensor.shape[:2]
+    rows = []
+
+    for layer in range(n_layers):
+        for head in range(n_heads):
+            cell_seed = seed + layer * n_heads + head
+            result = permutation_test_per_domain(
+                distance_tensor[layer, head],
+                metadata_df,
+                K=K,
+                seed=cell_seed,
+            )
+            rows.append({
+                "layer": layer,
+                "head": head,
+                "observed": result["observed"],
+                "p_value": result["p_value"],
+                "effect_size": result["effect_size"],
+            })
+
+    df = pd.DataFrame(rows)
+
+    # BH correction across all n_layers * n_heads tests simultaneously
+    reject_mask = _bh_correction(df["p_value"].values, alpha=0.05)
+    df["passes_bh"] = reject_mask.astype(bool)
+
+    return df.reset_index(drop=True)
