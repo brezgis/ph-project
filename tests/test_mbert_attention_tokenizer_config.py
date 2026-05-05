@@ -1,8 +1,8 @@
-"""Pin the tokenizer/model configuration the phase3_thresholds notebook depends on.
+"""Pin the tokenizer/model configuration the mbert_attention_thresholds notebook depends on.
 
 These tests run without GPU and without producing any feature .npy files. They
 catch two classes of silent regression that the shape/no-inf/non-zero tests in
-test_phase3_thresholds_features.py would not:
+test_mbert_attention_thresholds_features.py would not:
 
 1. **Wrong model checkpoint loaded.** If the local HuggingFace cache is stale,
    corrupted, or someone fine-tunes a different model and saves it under the
