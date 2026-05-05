@@ -1,0 +1,4 @@
+feature_type,pair,domain,lang_a,lang_b,n_features,n_kwic_a,n_kwic_b,n_sig_features_q05,frac_sig_features,perm_obs_dist,perm_p_value,top5_feature_idx
+thresholds,en-es,color,en,es,5184,2200,2161,3914,0.755,582.138924,0.001,"[300, 153, 156, 438, 439]"
+thresholds,en-ru,color,en,ru,5184,2200,2267,4210,0.8121,962.332984,0.001,"[372, 289, 296, 297, 366]"
+thresholds,ru-es,color,ru,es,5184,2267,2161,4050,0.7812,705.887967,0.001,"[392, 1199, 301, 374, 372]"
