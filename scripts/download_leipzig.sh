@@ -109,18 +109,18 @@ BASE_URL="https://downloads.wortschatz-leipzig.de/corpora"
 # Populate these after the first run.
 # -----------------------------------------------------------------------
 declare -A EXPECTED_SHA256=(
-    # 2019 corpora — TODO: populate after first download (Phase B)
-    ["eng_news_2019_1M"]="TODO"
-    ["rus_news_2019_1M"]="TODO"
-    ["spa_news_2019_1M"]="TODO"
-    # 2020 corpora — sha256 pinned from prior download run
+    # 2019 corpora
+    ["eng_news_2019_1M"]="6270ec2e22248e7f261505c5b7c26b55cea12cd4ef84e90f269f8eab4dc48ede"
+    ["rus_news_2019_1M"]="93fed13d5d32bf491149223eac593fbc9fecb4a88e73905455e418a4bdd20012"
+    ["spa_news_2019_1M"]="e58887b9e766c433f6a6c5ae2d87e892609f0595157b23f4ede0290c808dcfbc"
+    # 2020 corpora
     ["eng_news_2020_1M"]="be782eb82690415241d623fd2448dfd3fc68102ac1ce971107cb130420abbb41"
     ["rus_news_2020_1M"]="f522a9cccc1d63a5f2ccf11a47e144dd5abd1c840e8ccfb90c249630aaad4657"
     ["spa_news_2020_1M"]="89fb1319f53b341466c065152467cb1bd3789a3ed9aa143807b1952503ef1d50"
-    # 2023 corpora — TODO: populate after first download (Phase B)
-    ["eng_news_2023_1M"]="TODO"
-    ["rus_news_2023_1M"]="TODO"
-    ["spa_news_2023_1M"]="TODO"
+    # 2023 corpora
+    ["eng_news_2023_1M"]="c8a5a5e72897aa5e367b0319c1884831c02aaf29bf81342de31ca1b1cc8f3e4c"
+    ["rus_news_2023_1M"]="9e09e5298f4a2a2dffed14d00478bbe61f02e53647986150879520c877e8f76d"
+    ["spa_news_2023_1M"]="6a720452204673e44e16e129c49a9815291b6664e1585763b25adcf5c1d8b25b"
 )
 
 # -----------------------------------------------------------------------
