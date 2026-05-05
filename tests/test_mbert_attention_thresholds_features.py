@@ -1,4 +1,4 @@
-"""Tests for phase3_thresholds.ipynb feature outputs — cross-linguistic.
+"""Tests for mbert_attention_thresholds.ipynb feature outputs — cross-linguistic.
 
 These tests verify that the adapted threshold notebook produces correctly-shaped
 feature tensors for each (lang, domain) combination in scope. The notebook

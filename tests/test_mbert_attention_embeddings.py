@@ -1,4 +1,4 @@
-"""Tests for phase3_thresholds.ipynb embedding + manifest outputs (16v.2).
+"""Tests for mbert_attention_thresholds.ipynb embedding + manifest outputs (16v.2).
 
 These tests verify that the adapted threshold notebook produces:
   1. Embedding .npy parts under data/phase3/embeddings/ with shape

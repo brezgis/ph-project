@@ -3,7 +3,7 @@
 This document specifies the on-disk format for Phase 1 (`ph-project-5f9`)
 KWIC extraction outputs. Phase 3 (`ph-project-mwk`) consumes these files.
 Implementations of `phase1_kwic` MUST conform to this schema; the
-threshold notebook in Phase 3 (`notebooks/phase3_thresholds.ipynb`)
+threshold notebook in Phase 3 (`notebooks/mbert_attention_thresholds.ipynb`)
 expects exactly these columns and paths.
 
 ## Layout
