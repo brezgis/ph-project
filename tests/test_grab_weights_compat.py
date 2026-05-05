@@ -365,8 +365,6 @@ def test_slow_tokenizer_rejected():
     (is_fast=False) is via the legacy Python-backend class, exposed as
     `BertTokenizerLegacy` in transformers.models.bert.tokenization_bert_legacy.
     """
-    import torch
-    from transformers import BertModel
     from transformers.models.bert.tokenization_bert_legacy import BertTokenizerLegacy
     from replication.grab_weights_compat import grab_attention_and_embeddings
 
@@ -379,16 +377,10 @@ def test_slow_tokenizer_rejected():
         "Test pre-condition failed: expected BertTokenizerLegacy.is_fast == False"
     )
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    model = BertModel.from_pretrained(
-        "bert-base-multilingual-cased",
-        output_attentions=True,
-        output_hidden_states=True,
-    ).to(device)
-    model.eval()
-
+    # The fast-tokenizer guard fires at function entry, before the model is touched —
+    # passing model=None proves the guard runs before any model usage.
     with pytest.raises(ValueError) as exc_info:
-        grab_attention_and_embeddings(model, slow_tok, SENTENCES, MAX_LEN, device=device)
+        grab_attention_and_embeddings(None, slow_tok, SENTENCES, MAX_LEN, device="cpu")
 
     assert "BertTokenizerFast" in str(exc_info.value), (
         f"Expected error message to contain 'BertTokenizerFast', got: {exc_info.value}"

@@ -228,7 +228,8 @@ def test_manifest_embedding_offsets_consistent(lang, domain):
         _skip_or_fail(f"Manifest not found: {path}")
     df = pd.read_parquet(path)
     for part_num, group in df.groupby("embedding_part"):
-        offsets = group["embedding_offset"].tolist()
+        # Sort by kwic_row_id so the test does not depend on incidental groupby ordering.
+        offsets = group.sort_values("kwic_row_id")["embedding_offset"].tolist()
         expected = list(range(len(offsets)))
         assert offsets == expected, (
             f"Part {part_num}: embedding_offset values are not contiguous 0..{len(offsets)-1}: "
