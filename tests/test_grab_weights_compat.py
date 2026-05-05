@@ -234,3 +234,162 @@ def test_snapshot_first_row(attn):
         f"  Expected: {SNAPSHOT_ROW.tolist()}\n"
         f"  Got:      {actual_row.tolist()}"
     )
+
+
+# ===========================================================================
+# Tests for grab_attention_and_embeddings (new function — additive)
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Session-scoped fixture — load mBERT with hidden states enabled
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def mbert_with_emb():
+    """Load mBERT with output_attentions=True AND output_hidden_states=True.
+
+    Uses BertTokenizerFast (fast tokenizer) so BatchEncoding.word_ids() is
+    available. Yields (model, tokenizer, device).
+
+    DO NOT merge with the existing `mbert` fixture — that one is loaded with
+    output_hidden_states=False (default) and uses AutoTokenizer which may
+    resolve to the slow tokenizer in some environments.
+    """
+    import torch
+    from transformers import BertModel, BertTokenizerFast
+
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    tokenizer = BertTokenizerFast.from_pretrained(
+        "bert-base-multilingual-cased",
+        do_lower_case=False,
+    )
+    model = BertModel.from_pretrained(
+        "bert-base-multilingual-cased",
+        output_attentions=True,
+        output_hidden_states=True,
+    )
+    model.eval()
+    import torch as _torch
+    _torch.manual_seed(42)
+    model.to(device)
+
+    yield model, tokenizer, device
+
+
+@pytest.fixture(scope="session")
+def attn_emb_wids(mbert_with_emb):
+    """Call grab_attention_and_embeddings once for the whole session.
+
+    Returns (attn, emb, wids) from SENTENCES with MAX_LEN=16. All tests for
+    the new function take this fixture instead of calling the function
+    individually — avoids redundant forward passes through mBERT.
+    """
+    from replication.grab_weights_compat import grab_attention_and_embeddings
+
+    model, tokenizer, device = mbert_with_emb
+    return grab_attention_and_embeddings(model, tokenizer, SENTENCES, MAX_LEN, device=device)
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+def test_returns_three_objects(attn_emb_wids):
+    """Return value must unpack to (attn, emb, wids) with correct types."""
+    result = attn_emb_wids
+    assert len(result) == 3, f"Expected 3-tuple, got {len(result)}-tuple"
+    attn, emb, wids = result
+    assert isinstance(attn, np.ndarray), f"attn must be np.ndarray, got {type(attn)}"
+    assert isinstance(emb, np.ndarray), f"emb must be np.ndarray, got {type(emb)}"
+    assert isinstance(wids, list), f"wids must be list, got {type(wids)}"
+
+
+def test_attention_shape_dtype_bounds(attn_emb_wids):
+    """Attention from new function: shape (12, batch, 12, MAX_LEN, MAX_LEN), float16, in [0, 1]."""
+    attn, _, _ = attn_emb_wids
+    expected_shape = (N_LAYERS, BATCH, N_HEADS, MAX_LEN, MAX_LEN)
+    assert attn.shape == expected_shape, (
+        f"Expected attention shape {expected_shape}, got {attn.shape}"
+    )
+    assert attn.dtype == np.float16, (
+        f"Expected attention dtype float16, got {attn.dtype}"
+    )
+    arr = attn.astype(np.float32)
+    assert arr.min() >= 0.0, f"Found negative attention weight: min={arr.min()}"
+    assert arr.max() <= 1.0, f"Found attention weight > 1: max={arr.max()}"
+
+
+def test_embeddings_shape_dtype_finite(attn_emb_wids):
+    """Embeddings: shape (batch, MAX_LEN, 768), float16, all finite."""
+    _, emb, _ = attn_emb_wids
+    expected_shape = (BATCH, MAX_LEN, 768)
+    assert emb.shape == expected_shape, (
+        f"Expected embeddings shape {expected_shape}, got {emb.shape}"
+    )
+    assert emb.dtype == np.float16, (
+        f"Expected embeddings dtype float16, got {emb.dtype}"
+    )
+    assert np.isfinite(emb.astype(np.float32)).all(), (
+        "Embeddings contain non-finite values (NaN or Inf)"
+    )
+
+
+def test_word_ids_structure(attn_emb_wids):
+    """word_ids: len == batch; each inner list len == MAX_LEN; [CLS] at index 0 is None;
+    at least one non-None word_id per batch item."""
+    _, _, wids = attn_emb_wids
+    assert len(wids) == BATCH, (
+        f"Expected {BATCH} word_id lists, got {len(wids)}"
+    )
+    for i, wid_list in enumerate(wids):
+        assert len(wid_list) == MAX_LEN, (
+            f"Batch item {i}: expected word_ids length {MAX_LEN}, got {len(wid_list)}"
+        )
+        assert wid_list[0] is None, (
+            f"Batch item {i}: position 0 ([CLS]) must be None, got {wid_list[0]}"
+        )
+        non_none = [w for w in wid_list if w is not None]
+        assert len(non_none) > 0, (
+            f"Batch item {i}: expected at least one non-None word_id (real content token)"
+        )
+
+
+def test_slow_tokenizer_rejected():
+    """grab_attention_and_embeddings must raise ValueError for a slow tokenizer.
+
+    The error message must contain the substring 'BertTokenizerFast' (contract).
+
+    In transformers 5.x, `BertTokenizer` is always backed by the fast tokenizers
+    library (is_fast=True). The only way to get a genuinely slow tokenizer
+    (is_fast=False) is via the legacy Python-backend class, exposed as
+    `BertTokenizerLegacy` in transformers.models.bert.tokenization_bert_legacy.
+    """
+    import torch
+    from transformers import BertModel
+    from transformers.models.bert.tokenization_bert_legacy import BertTokenizerLegacy
+    from replication.grab_weights_compat import grab_attention_and_embeddings
+
+    # BertTokenizerLegacy is the Python-backend slow tokenizer (is_fast=False).
+    slow_tok = BertTokenizerLegacy.from_pretrained(
+        "bert-base-multilingual-cased",
+        do_lower_case=False,
+    )
+    assert not slow_tok.is_fast, (
+        "Test pre-condition failed: expected BertTokenizerLegacy.is_fast == False"
+    )
+
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    model = BertModel.from_pretrained(
+        "bert-base-multilingual-cased",
+        output_attentions=True,
+        output_hidden_states=True,
+    ).to(device)
+    model.eval()
+
+    with pytest.raises(ValueError) as exc_info:
+        grab_attention_and_embeddings(model, slow_tok, SENTENCES, MAX_LEN, device=device)
+
+    assert "BertTokenizerFast" in str(exc_info.value), (
+        f"Expected error message to contain 'BertTokenizerFast', got: {exc_info.value}"
+    )
