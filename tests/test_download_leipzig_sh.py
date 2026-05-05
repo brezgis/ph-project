@@ -30,9 +30,15 @@ SCRIPT = REPO_ROOT / "scripts" / "download_leipzig.sh"
 GITIGNORE = REPO_ROOT / ".gitignore"
 
 CORPUS_IDS = [
+    "eng_news_2019_1M",
     "eng_news_2020_1M",
+    "eng_news_2023_1M",
+    "rus_news_2019_1M",
     "rus_news_2020_1M",
+    "rus_news_2023_1M",
+    "spa_news_2019_1M",
     "spa_news_2020_1M",
+    "spa_news_2023_1M",
 ]
 
 LANG_DIRS = ["en", "ru", "es"]
@@ -154,12 +160,28 @@ def test_sentences_txt_extraction():
 # ---------------------------------------------------------------------------
 
 
-def test_sha256_todo_placeholder_present():
-    """Script must have TODO SHA-256 placeholders for first-run hash printing."""
+def test_sha256_verify_or_print_logic_present():
+    """Script must have the verify_or_print helper that handles TODO placeholders.
+
+    This test verifies the pattern — not the placeholder state — so it passes
+    both during Phase A (when some entries are still TODO) and after Phase B
+    (when all sha256s are pinned).  The verify_or_print function handles
+    TODO-vs-real logic; asserting it exists is sufficient to confirm the
+    first-run hash-printing behaviour is in place.
+    """
     text = SCRIPT.read_text()
-    assert "TODO" in text, (
-        "Expected 'TODO' SHA-256 placeholder not found in script"
+    assert "verify_or_print" in text, (
+        "verify_or_print helper not found in script — "
+        "first-run SHA-256 placeholder logic is missing"
     )
+
+def test_all_corpus_ids_have_sha256_entry():
+    """Every corpus ID in CORPUS_IDS must have a corresponding entry in EXPECTED_SHA256."""
+    text = SCRIPT.read_text()
+    for corpus_id in CORPUS_IDS:
+        assert f'["{corpus_id}"]' in text, (
+            f"EXPECTED_SHA256 entry missing for corpus ID '{corpus_id}'"
+        )
 
 
 def test_skip_sha_env_var_present():

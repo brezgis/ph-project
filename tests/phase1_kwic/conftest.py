@@ -26,7 +26,7 @@ import textwrap
 import pandas as pd
 import pytest
 
-from phase1_kwic.extract import CORPUS_SOURCE_ID
+from phase1_kwic.extract import CORPUS_SOURCE_IDS
 
 # ---------------------------------------------------------------------------
 # Constants shared by both fixtures
@@ -35,7 +35,10 @@ from phase1_kwic.extract import CORPUS_SOURCE_ID
 # Compliant baseline language / domain
 _LANG = "en"
 _DOMAIN = "color"
-_CORPUS_SOURCE = CORPUS_SOURCE_ID[_LANG]
+# Pick the first ID from the multi-year list as the single corpus ID for
+# synthetic fixtures — all fixture rows use one deterministic ID so that
+# the "wrong corpus source" violation test can supply a different lang's ID.
+_CORPUS_SOURCE = CORPUS_SOURCE_IDS[_LANG][0]
 
 # A pair of real English color terms (surfaces exactly as in the YAML)
 _TERM_A = "red"
@@ -56,7 +59,7 @@ _COMPLIANT_ROWS = [
 _COMPLIANT_SIDECAR: dict = {
     "language": _LANG,
     "domain": _DOMAIN,
-    "corpus_source": _CORPUS_SOURCE,
+    "corpus_source": [_CORPUS_SOURCE],
     "corpus_total_sentences": 1000000,
     "extracted_at": "2026-05-04T01:00:00Z",
     "seed": 0,
@@ -226,7 +229,7 @@ def _violation_labels_mismatch(tmp_path: pathlib.Path):
 def _violation_wrong_corpus_source(tmp_path: pathlib.Path):
     """corpus_source is the Russian ID instead of English — violates rule (f)."""
     rows = [
-        (r[0], r[1], r[2], r[3], CORPUS_SOURCE_ID["ru"])  # wrong lang corpus
+        (r[0], r[1], r[2], r[3], CORPUS_SOURCE_IDS["ru"][0])  # wrong lang corpus
         for r in _COMPLIANT_ROWS
     ]
     sidecar = json.loads(json.dumps(_COMPLIANT_SIDECAR))
@@ -241,7 +244,7 @@ def _violation_ru_no_cyrillic(tmp_path: pathlib.Path):
     """Russian CSV with no Cyrillic chars in any sentence — violates rule (g)."""
     # Use real ru corpus_source and a real ru color term "красный" surface form
     # but write only ASCII sentences so no Cyrillic chars appear.
-    ru_corpus_source = CORPUS_SOURCE_ID["ru"]
+    ru_corpus_source = CORPUS_SOURCE_IDS["ru"][0]
     # "красный" is the first term in ru/color.yaml
     ru_term = "красный"
     rows = [
@@ -301,7 +304,7 @@ def _violation_es_no_accent(tmp_path: pathlib.Path):
     """
     import json as _json
 
-    es_corpus_source = CORPUS_SOURCE_ID["es"]
+    es_corpus_source = CORPUS_SOURCE_IDS["es"][0]
     es_term_a = "rojo"
     es_term_b = "azul"
     rows = [

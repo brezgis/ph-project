@@ -8,9 +8,10 @@ that produces the per-(lang, domain) CSVs described in data/kwic/SCHEMA.md.
 
 Public API
 ----------
-extract_kwic(lang, domain, corpus_path, corpus_source_id, ...)
-    Stream the Leipzig sentences file, match canon terms, dedup, sample,
-    and return (df, report) conforming to SCHEMA.md.
+extract_kwic(lang, domain, corpus_paths, corpus_source_ids, ...)
+    Stream one or more Leipzig sentences files, match canon terms, dedup,
+    sample, and return (df, report) conforming to SCHEMA.md.
+    Each row's corpus_source records the originating corpus ID.
 
 Tokenization strategy
 ---------------------
@@ -53,7 +54,7 @@ import pathlib
 import random
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import pandas as pd
 
@@ -71,13 +72,16 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Pinned corpus IDs — one per language
+# Pinned corpus IDs — multi-year list per language
 # ---------------------------------------------------------------------------
+# Each language uses 3 years: 2019, 2020, 2023.  Year coverage is symmetric
+# across en/ru/es (the only set of years with full overlap on Leipzig), which
+# keeps cross-linguistic comparisons methodology-clean.
 
-CORPUS_SOURCE_ID: dict[str, str] = {
-    "en": "eng_news_2020_1M",
-    "ru": "rus_news_2020_1M",
-    "es": "spa_news_2020_1M",
+CORPUS_SOURCE_IDS: dict[str, list[str]] = {
+    "en": ["eng_news_2019_1M", "eng_news_2020_1M", "eng_news_2023_1M"],
+    "ru": ["rus_news_2019_1M", "rus_news_2020_1M", "rus_news_2023_1M"],
+    "es": ["spa_news_2019_1M", "spa_news_2020_1M", "spa_news_2023_1M"],
 }
 
 # Default data root for CLI use
@@ -85,10 +89,16 @@ _REPO_ROOT = pathlib.Path(__file__).parent.parent
 _DEFAULT_CORPUS_DIR = _REPO_ROOT / "data" / "leipzig"
 
 
-def default_corpus_path(lang: str) -> pathlib.Path:
-    """Return the default corpus path for *lang* per SCHEMA.md layout."""
-    corpus_id = CORPUS_SOURCE_ID[lang]
-    return _DEFAULT_CORPUS_DIR / lang / f"{corpus_id}-sentences.txt"
+def default_corpus_paths(lang: str) -> list[pathlib.Path]:
+    """Return the default corpus paths for *lang* per SCHEMA.md layout.
+
+    Returns one path per pinned corpus year, in the same order as
+    ``CORPUS_SOURCE_IDS[lang]``.
+    """
+    return [
+        _DEFAULT_CORPUS_DIR / lang / f"{corpus_id}-sentences.txt"
+        for corpus_id in CORPUS_SOURCE_IDS[lang]
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -120,8 +130,8 @@ def _matcher_versions() -> dict[str, str]:
 def extract_kwic(
     lang: str,
     domain: str,
-    corpus_path: pathlib.Path,
-    corpus_source_id: str,
+    corpus_paths: "Sequence[pathlib.Path]",
+    corpus_source_ids: "Sequence[str]",
     n_samples: int = 200,
     seed: int = 0,
     window: int = 10,
@@ -130,7 +140,7 @@ def extract_kwic(
     _matcher_override: "Matcher | None" = None,
     _terms_override: "list[Term] | None" = None,
 ) -> tuple[pd.DataFrame, dict]:
-    """Stream the Leipzig sentences file, match canon terms, dedup, sample, emit.
+    """Stream one or more Leipzig sentences files, match canon terms, dedup, sample, emit.
 
     Parameters
     ----------
@@ -138,10 +148,13 @@ def extract_kwic(
         BCP-47-style language code (``"en"``, ``"ru"``, or ``"es"``).
     domain : str
         Semantic domain (``"color"``, ``"emotion"``, or ``"kinship"``).
-    corpus_path : pathlib.Path
-        Path to the Leipzig sentences TSV file (``idx<TAB>sentence``, UTF-8).
-    corpus_source_id : str
-        Pinned corpus ID string, e.g. ``"eng_news_2020_1M"``.
+    corpus_paths : Sequence[pathlib.Path]
+        Paths to Leipzig sentences TSV files (``idx<TAB>sentence``, UTF-8).
+        Must be non-empty and the same length as ``corpus_source_ids``.
+    corpus_source_ids : Sequence[str]
+        Pinned corpus ID strings, one per path, e.g. ``["eng_news_2020_1M"]``.
+        Each emitted row records the originating corpus ID in
+        ``corpus_source``.
     n_samples : int, default 200
         Maximum KWIC hits to emit per canon term.
     seed : int, default 0
@@ -164,6 +177,18 @@ def extract_kwic(
     report : dict
         Sidecar report conforming to the SCHEMA.md sidecar schema.
     """
+    # ------------------------------------------------------------------
+    # 0. Validate corpus_paths / corpus_source_ids
+    # ------------------------------------------------------------------
+    corpus_paths = list(corpus_paths)
+    corpus_source_ids = list(corpus_source_ids)
+    if len(corpus_paths) == 0:
+        raise ValueError("corpus_paths must be non-empty")
+    if len(corpus_paths) != len(corpus_source_ids):
+        raise ValueError(
+            f"corpus_paths and corpus_source_ids must have the same length; "
+            f"got {len(corpus_paths)} paths and {len(corpus_source_ids)} IDs"
+        )
     # ------------------------------------------------------------------
     # 1. Load canon terms and matcher
     # ------------------------------------------------------------------
@@ -195,30 +220,32 @@ def extract_kwic(
         head_lemma_to_term_idxs[head_lemma].append((term_idx, head_offset))
 
     # ------------------------------------------------------------------
-    # 3. Per-term hit accumulator: term_idx → list of (kwic_str, head_ws_idx)
+    # 3. Per-term hit accumulator: term_idx → list of
+    #    (kwic_str, target_idx_in_kwic, corpus_source_id)
     # ------------------------------------------------------------------
-    # hits[term_idx] = list of (kwic_str, target_idx_in_kwic)
-    hits: dict[int, list[tuple[str, int]]] = {i: [] for i in range(len(terms))}
+    hits: dict[int, list[tuple[str, int, str]]] = {i: [] for i in range(len(terms))}
     # n_corpus_hits[term_idx] — count BEFORE dedup
     n_corpus_hits: dict[int, int] = {i: 0 for i in range(len(terms))}
 
     # ------------------------------------------------------------------
-    # 4. Stream the corpus file using lemmatize_many for batched processing.
+    # 4. Stream corpus files using lemmatize_many for batched processing.
     #
-    #    Strategy: read the corpus in chunks of _LEMMATIZE_CHUNK_SIZE valid
-    #    sentences at a time, call matcher.lemmatize_many on each chunk, then
-    #    process the (sentence, ws_lemmas) pairs exactly as before.
+    #    Strategy: iterate over each (corpus_path, corpus_source_id) pair.
+    #    For each file, read in chunks of _LEMMATIZE_CHUNK_SIZE valid
+    #    sentences, call matcher.lemmatize_many on each chunk, then
+    #    process the (sentence, ws_lemmas) pairs.
     #
-    #    This replaces the previous per-ws-token _lemmatize_ws_token loop:
-    #    instead of N spaCy calls per sentence (one per whitespace token), we
-    #    make one batched nlp.pipe call per chunk — typically 10–20x faster
-    #    for SpacyMatcher on en/es.  PymorphyMatcher.lemmatize_many is a thin
-    #    loop (pymorphy3 has no batch API) so the Russian path is unchanged.
+    #    Per-row provenance: each row records the corpus_source_id of the
+    #    file it came from.  The active ID is tracked via a nonlocal binding
+    #    (_active_corpus_source_id) updated before each file is processed.
+    #
+    #    corpus_total_sentences sums across all files automatically.
     # ------------------------------------------------------------------
     corpus_total_sentences = 0
+    _active_corpus_source_id: str = corpus_source_ids[0]
 
     def _iter_valid_sentences(fh):
-        """Yield (ws_tokens, sentence_str) for valid non-empty corpus lines."""
+        """Yield sentence_str for valid non-empty corpus lines."""
         for raw_line in fh:
             raw_line = raw_line.rstrip("\n")
             if not raw_line.strip():
@@ -275,27 +302,30 @@ def extract_kwic(
                 target_idx_in_kwic = ws_idx - left
 
                 n_corpus_hits[term_idx] += 1
-                hits[term_idx].append((kwic_str, target_idx_in_kwic))
+                # Record the active corpus source ID for per-row provenance
+                hits[term_idx].append((kwic_str, target_idx_in_kwic, _active_corpus_source_id))
 
-    with corpus_path.open("r", encoding="utf-8") as fh:
-        chunk: list[str] = []
+    for corpus_path, corpus_source_id in zip(corpus_paths, corpus_source_ids):
+        _active_corpus_source_id = corpus_source_id
+        with corpus_path.open("r", encoding="utf-8") as fh:
+            chunk: list[str] = []
 
-        for sentence in _iter_valid_sentences(fh):
-            chunk.append(sentence)
-            if len(chunk) >= _LEMMATIZE_CHUNK_SIZE:
-                # Batch-lemmatize the chunk.  lemmatize_many yields one list per
-                # sentence, where each list entry is (surface, lemma) for one
-                # whitespace token.  We extract just the lemma strings.
+            for sentence in _iter_valid_sentences(fh):
+                chunk.append(sentence)
+                if len(chunk) >= _LEMMATIZE_CHUNK_SIZE:
+                    # Batch-lemmatize the chunk.  lemmatize_many yields one list per
+                    # sentence, where each list entry is (surface, lemma) for one
+                    # whitespace token.  We extract just the lemma strings.
+                    for sentence_i, pairs in zip(chunk, matcher.lemmatize_many(chunk)):
+                        ws_lemmas_i: list[str] = [lemma for _, lemma in pairs]
+                        _process_sentence(sentence_i, ws_lemmas_i)
+                    chunk = []
+
+            # Process the final partial chunk (if any)
+            if chunk:
                 for sentence_i, pairs in zip(chunk, matcher.lemmatize_many(chunk)):
-                    ws_lemmas_i: list[str] = [lemma for _, lemma in pairs]
+                    ws_lemmas_i = [lemma for _, lemma in pairs]
                     _process_sentence(sentence_i, ws_lemmas_i)
-                chunk = []
-
-        # Process the final partial chunk (if any)
-        if chunk:
-            for sentence_i, pairs in zip(chunk, matcher.lemmatize_many(chunk)):
-                ws_lemmas_i = [lemma for _, lemma in pairs]
-                _process_sentence(sentence_i, ws_lemmas_i)
 
     # ------------------------------------------------------------------
     # 5. Per-term: dedup → sample → collect
@@ -308,13 +338,16 @@ def extract_kwic(
         term_hits = hits[term_idx]
         n_raw = n_corpus_hits[term_idx]
 
-        # Dedup on kwic_str (preserve first occurrence to keep stable order)
+        # Dedup on kwic_str (preserve first occurrence to keep stable order).
+        # Each hit is (kwic_str, target_idx, corpus_source_id); dedup on
+        # kwic_str alone — cross-year duplicate sentences for the same term
+        # are collapsed here automatically.
         seen_kwic: set[str] = set()
-        deduped: list[tuple[str, int]] = []
-        for kwic_str, tidx in term_hits:
+        deduped: list[tuple[str, int, str]] = []
+        for kwic_str, tidx, hit_corpus_id in term_hits:
             if kwic_str not in seen_kwic:
                 seen_kwic.add(kwic_str)
-                deduped.append((kwic_str, tidx))
+                deduped.append((kwic_str, tidx, hit_corpus_id))
 
         n_after_dedup = len(deduped)
 
@@ -332,9 +365,9 @@ def extract_kwic(
         n_emitted = len(sampled)
         under_target = n_emitted < n_samples
 
-        # Collect rows
-        for kwic_str, tidx in sampled:
-            rows.append((term.surface, term.surface, kwic_str, tidx, corpus_source_id))
+        # Collect rows — per-row corpus_source reflects originating corpus
+        for kwic_str, tidx, hit_corpus_id in sampled:
+            rows.append((term.surface, term.surface, kwic_str, tidx, hit_corpus_id))
 
         term_report_entries.append({
             "term": term.surface,
@@ -360,7 +393,7 @@ def extract_kwic(
     report: dict = {
         "language": lang,
         "domain": domain,
-        "corpus_source": corpus_source_id,
+        "corpus_source": list(corpus_source_ids),  # input list, in order
         "corpus_total_sentences": corpus_total_sentences,
         "extracted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "seed": seed,

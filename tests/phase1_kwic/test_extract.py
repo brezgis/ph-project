@@ -158,8 +158,8 @@ def _run(
     return extract_kwic(
         lang="en",
         domain="color",
-        corpus_path=corpus_file,
-        corpus_source_id="test_corpus_1M",
+        corpus_paths=[corpus_file],
+        corpus_source_ids=["test_corpus_1M"],
         n_samples=n_samples,
         seed=seed,
         window=window,
@@ -279,8 +279,8 @@ class TestDeduplication:
         df, report = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -417,8 +417,8 @@ class TestMinPostTargetFilter:
         df, report = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -448,8 +448,8 @@ class TestMinPostTargetFilter:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -550,8 +550,8 @@ class TestMultiwordTerms:
         df, report = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -583,8 +583,8 @@ class TestMultiwordTerms:
         df, report = extract_kwic(
             lang="es",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -615,8 +615,8 @@ class TestMultiwordTerms:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -662,8 +662,8 @@ class TestEmptyCorpus:
         df, report = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -686,8 +686,8 @@ class TestEmptyCorpus:
         df, report = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -737,8 +737,8 @@ class TestPunctuationHandling:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -756,24 +756,26 @@ class TestPunctuationHandling:
 
 
 class TestCorpusSourceConstants:
-    """Sanity-check the CORPUS_SOURCE_ID dict and default_corpus_path helper."""
+    """Sanity-check the CORPUS_SOURCE_IDS dict and default_corpus_paths helper."""
 
-    def test_corpus_source_id_has_all_langs(self):
-        from phase1_kwic.extract import CORPUS_SOURCE_ID
+    def test_corpus_source_ids_has_all_langs(self):
+        from phase1_kwic.extract import CORPUS_SOURCE_IDS
         from phase1_kwic import SUPPORTED_LANGUAGES
-        assert set(CORPUS_SOURCE_ID.keys()) == set(SUPPORTED_LANGUAGES)
+        assert set(CORPUS_SOURCE_IDS.keys()) == set(SUPPORTED_LANGUAGES)
 
-    def test_corpus_source_id_values(self):
-        from phase1_kwic.extract import CORPUS_SOURCE_ID
-        assert CORPUS_SOURCE_ID["en"] == "eng_news_2020_1M"
-        assert CORPUS_SOURCE_ID["ru"] == "rus_news_2020_1M"
-        assert CORPUS_SOURCE_ID["es"] == "spa_news_2020_1M"
+    def test_corpus_source_ids_values(self):
+        from phase1_kwic.extract import CORPUS_SOURCE_IDS
+        assert CORPUS_SOURCE_IDS["en"] == ["eng_news_2019_1M", "eng_news_2020_1M", "eng_news_2023_1M"]
+        assert CORPUS_SOURCE_IDS["ru"] == ["rus_news_2019_1M", "rus_news_2020_1M", "rus_news_2023_1M"]
+        assert CORPUS_SOURCE_IDS["es"] == ["spa_news_2019_1M", "spa_news_2020_1M", "spa_news_2023_1M"]
 
-    def test_default_corpus_path_format(self):
-        from phase1_kwic.extract import default_corpus_path
-        p = default_corpus_path("en")
-        assert p.name == "eng_news_2020_1M-sentences.txt"
-        assert p.parent.name == "en"
+    def test_default_corpus_paths_format(self):
+        from phase1_kwic.extract import CORPUS_SOURCE_IDS, default_corpus_paths
+        paths = default_corpus_paths("en")
+        assert len(paths) == 3
+        for i, path in enumerate(paths):
+            assert path.name == f"{CORPUS_SOURCE_IDS['en'][i]}-sentences.txt"
+            assert path.parent.name == "en"
 
 
 # ---------------------------------------------------------------------------
@@ -812,8 +814,8 @@ class TestPerTermSubseedIndependence:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=n_samples,
             seed=0,
             window=10,
@@ -868,8 +870,8 @@ class TestLeftWindowClip:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -899,8 +901,8 @@ class TestEmptyCorpusColumnSchema:
         df, _ = extract_kwic(
             lang="en",
             domain="color",
-            corpus_path=corpus,
-            corpus_source_id="test_corpus",
+            corpus_paths=[corpus],
+            corpus_source_ids=["test_corpus"],
             n_samples=200,
             seed=0,
             window=10,
@@ -1071,8 +1073,8 @@ def test_chunk_boundary_hit_count(tmp_path: pathlib.Path, n_sentences: int) -> N
     df, report = extract_kwic(
         lang="en",
         domain="color",
-        corpus_path=corpus,
-        corpus_source_id="test_corpus",
+        corpus_paths=[corpus],
+        corpus_source_ids=["test_corpus"],
         n_samples=n_sentences + 1,  # never cap
         seed=0,
         window=10,
@@ -1095,3 +1097,170 @@ def test_chunk_boundary_hit_count(tmp_path: pathlib.Path, n_sentences: int) -> N
         f"n_sentences={n_sentences}: DataFrame has {len(df)} rows, "
         f"expected {n_sentences}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-corpus API: new CORPUS_SOURCE_IDS list, multi-file iteration,
+# per-row provenance, and validation
+# ---------------------------------------------------------------------------
+
+
+class TestMultiCorpusAPI:
+    """Tests for the multi-corpus (corpus_paths / corpus_source_ids) API.
+
+    Phase i6q renamed corpus_path/corpus_source_id to accept lists so that
+    multiple yearly corpora can be aggregated in a single extraction pass.
+    Each row's corpus_source records the originating Leipzig ID.
+    """
+
+    def test_report_corpus_source_is_list(self, corpus_file, color_terms):
+        """report['corpus_source'] must be a list of input IDs, not a scalar."""
+        _, report = _run(corpus_file, color_terms)
+        assert isinstance(report["corpus_source"], list), (
+            f"report['corpus_source'] must be a list; got {type(report['corpus_source'])}"
+        )
+        assert report["corpus_source"] == ["test_corpus_1M"]
+
+    def test_single_corpus_per_row_provenance(self, corpus_file, color_terms):
+        """With one corpus, every CSV row's corpus_source matches the single ID."""
+        df, report = _run(corpus_file, color_terms)
+        assert (df["corpus_source"] == "test_corpus_1M").all(), (
+            "Expected all rows to carry the single corpus ID 'test_corpus_1M'"
+        )
+
+    def test_two_corpus_per_row_provenance(self, tmp_path, color_terms):
+        """Rows from each corpus carry the correct per-corpus ID."""
+        # Build two separate corpus files, each with unique sentences.
+        lines_a = [
+            f"{i+1}\ttok_a_{i} tok_b_{i} tok_c_{i} red suf_0_{i} suf_1_{i} suf_2_{i} suf_3_{i} suf_4_{i} suf_5_{i}"
+            for i in range(5)
+        ]
+        lines_b = [
+            f"{i+1}\ttok_x_{i} tok_y_{i} tok_z_{i} blue suf_0_{i} suf_1_{i} suf_2_{i} suf_3_{i} suf_4_{i} suf_5_{i}"
+            for i in range(5)
+        ]
+        corpus_a = tmp_path / "corpus_a.txt"
+        corpus_b = tmp_path / "corpus_b.txt"
+        corpus_a.write_text("\n".join(lines_a), encoding="utf-8")
+        corpus_b.write_text("\n".join(lines_b), encoding="utf-8")
+
+        terms = [
+            _make_term("red",  ("red",)),
+            _make_term("blue", ("blue",)),
+        ]
+        df, report = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_paths=[corpus_a, corpus_b],
+            corpus_source_ids=["corpus_a_id", "corpus_b_id"],
+            n_samples=200,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+
+        # All red rows come from corpus_a, all blue rows from corpus_b
+        red_sources = df[df["term"] == "red"]["corpus_source"].unique().tolist()
+        blue_sources = df[df["term"] == "blue"]["corpus_source"].unique().tolist()
+        assert red_sources == ["corpus_a_id"], (
+            f"Expected red rows to have corpus_source='corpus_a_id', got {red_sources}"
+        )
+        assert blue_sources == ["corpus_b_id"], (
+            f"Expected blue rows to have corpus_source='corpus_b_id', got {blue_sources}"
+        )
+
+        # Report lists both IDs in order
+        assert report["corpus_source"] == ["corpus_a_id", "corpus_b_id"]
+
+    def test_corpus_total_sentences_sums_across_corpora(self, tmp_path, color_terms):
+        """corpus_total_sentences is the sum across all corpus files."""
+        lines_a = [f"{i+1}\tfiller sentence {i}" for i in range(10)]
+        lines_b = [f"{i+1}\tanother sentence {i}" for i in range(7)]
+        corpus_a = tmp_path / "a.txt"
+        corpus_b = tmp_path / "b.txt"
+        corpus_a.write_text("\n".join(lines_a), encoding="utf-8")
+        corpus_b.write_text("\n".join(lines_b), encoding="utf-8")
+
+        terms = [_make_term("red", ("red",))]
+        _, report = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_paths=[corpus_a, corpus_b],
+            corpus_source_ids=["id_a", "id_b"],
+            n_samples=200,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+        assert report["corpus_total_sentences"] == 17, (
+            f"Expected 10+7=17 total sentences, got {report['corpus_total_sentences']}"
+        )
+
+    def test_mismatched_lengths_raises_value_error(self, corpus_file):
+        """Passing corpus_paths and corpus_source_ids of different lengths raises ValueError."""
+        terms = [_make_term("red", ("red",))]
+        with pytest.raises(ValueError, match="same length"):
+            extract_kwic(
+                lang="en",
+                domain="color",
+                corpus_paths=[corpus_file, corpus_file],
+                corpus_source_ids=["only_one_id"],
+                n_samples=10,
+                seed=0,
+                window=10,
+                min_post_target_tokens=5,
+                _matcher_override=StubMatcher(),
+                _terms_override=terms,
+            )
+
+    def test_empty_corpus_paths_raises_value_error(self, tmp_path):
+        """Passing empty corpus_paths raises ValueError."""
+        terms = [_make_term("red", ("red",))]
+        with pytest.raises(ValueError, match="non-empty"):
+            extract_kwic(
+                lang="en",
+                domain="color",
+                corpus_paths=[],
+                corpus_source_ids=[],
+                n_samples=10,
+                seed=0,
+                window=10,
+                min_post_target_tokens=5,
+                _matcher_override=StubMatcher(),
+                _terms_override=terms,
+            )
+
+    def test_cross_year_dedup(self, tmp_path, color_terms):
+        """Identical sentences from two corpora are deduplicated to one row."""
+        # Same sentence in both corpus files for "red"
+        dup_sentence = "tok_a tok_b tok_c red suf0 suf1 suf2 suf3 suf4 suf5"
+        corpus_a = tmp_path / "a.txt"
+        corpus_b = tmp_path / "b.txt"
+        corpus_a.write_text(f"1\t{dup_sentence}", encoding="utf-8")
+        corpus_b.write_text(f"1\t{dup_sentence}", encoding="utf-8")
+
+        terms = [_make_term("red", ("red",))]
+        df, report = extract_kwic(
+            lang="en",
+            domain="color",
+            corpus_paths=[corpus_a, corpus_b],
+            corpus_source_ids=["year_a", "year_b"],
+            n_samples=200,
+            seed=0,
+            window=10,
+            min_post_target_tokens=5,
+            _matcher_override=StubMatcher(),
+            _terms_override=terms,
+        )
+        red_rows = df[df["term"] == "red"]
+        # The duplicate from corpus_b is collapsed by the per-term dedup
+        assert len(red_rows) == 1, (
+            f"Expected 1 row after cross-year dedup (identical sentences), got {len(red_rows)}"
+        )
+        red_info = next(t for t in report["terms"] if t["term"] == "red")
+        assert red_info["n_corpus_hits"] == 2   # seen twice (once per corpus)
+        assert red_info["n_kept_after_dedup"] == 1  # deduplicated to 1
