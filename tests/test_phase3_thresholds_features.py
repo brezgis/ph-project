@@ -55,11 +55,23 @@ EXPECTED_SHAPE_SUFFIX = (6,)           # thresholds
 
 
 def _kwic_row_count(lang: str, domain: str) -> int:
-    """Return number of rows in the KWIC CSV for (lang, domain)."""
+    """Return number of rows in the KWIC CSV for (lang, domain).
+
+    Raises FileNotFoundError if the CSV is missing — surfaces config errors
+    clearly instead of letting a 0 propagate into a confusing shape mismatch.
+    Also asserts SCHEMA.md guarantees: no NaN or empty `sentence` rows. A
+    SCHEMA violation here would otherwise show up as a phantom shape diff.
+    """
     csv_path = os.path.join(KWIC_DIR, lang, f"{domain}.csv")
     if not os.path.exists(csv_path):
-        return 0
+        raise FileNotFoundError(f"KWIC CSV missing: {csv_path}")
     df = pd.read_csv(csv_path)
+    assert df["sentence"].notna().all(), (
+        f"KWIC CSV {csv_path} has NaN `sentence` rows — violates data/kwic/SCHEMA.md."
+    )
+    assert (df["sentence"].astype(str).str.len() > 0).all(), (
+        f"KWIC CSV {csv_path} has empty `sentence` rows — violates data/kwic/SCHEMA.md."
+    )
     return len(df)
 
 
@@ -96,6 +108,13 @@ def test_features_shape(lang, domain):
     path = _find_features_file(lang, domain)
     if path is None:
         _missing(lang, domain)
+    # Pin the model identity in the resolved filename. Catches the case
+    # where a stale .npy from an earlier model (e.g. bert-base-uncased
+    # during development) lingers and silently passes shape checks.
+    assert "bert-base-multilingual-cased" in os.path.basename(path), (
+        f"({lang!r}, {domain!r}): resolved feature file {path!r} does not encode "
+        f"`bert-base-multilingual-cased` in its name — wrong model checkpoint?"
+    )
     arr = np.load(path, allow_pickle=True)
     n_kwic = _kwic_row_count(lang, domain)
     expected_shape = EXPECTED_SHAPE_PREFIX + (n_kwic,) + EXPECTED_SHAPE_SUFFIX
