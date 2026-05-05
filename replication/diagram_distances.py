@@ -245,6 +245,10 @@ def load_lang_barcodes(
     metadata_rows = []
     global_sample_idx = 0
 
+    # First pass: load all parts and validate total sample count against KWIC before
+    # building metadata rows.  Without this pre-check, the metadata loop would raise
+    # IndexError (out-of-bounds iloc) instead of ValueError on barcode > KWIC mismatch.
+    loaded_parts: list[tuple[pathlib.Path, int, dict]] = []
     for part_file in part_files:
         part_num = int(re.search(r"_part(\d+)of\d+\.json$", part_file.name).group(1))
         part_diagrams = load_barcode_json(part_file)
@@ -260,6 +264,25 @@ def load_lang_barcodes(
                     f"{part_file.name}: (layer, head) {key} has {len(samples)} samples; "
                     f"expected {part_n} (from key {part_keys[0]})"
                 )
+
+        loaded_parts.append((part_file, part_num, part_diagrams))
+
+    # Validate total count matches KWIC before entering the metadata loop
+    total_samples = sum(
+        len(next(iter(part_diagrams.values()))) for _, _, part_diagrams in loaded_parts
+    )
+    if total_samples != len(kwic_df):
+        raise ValueError(
+            f"Barcode sample count ({total_samples}) does not match KWIC CSV row count "
+            f"({len(kwic_df)}) for ({lang!r}, {domain!r}). "
+            "This indicates a mismatch between the ripser run and the KWIC data. "
+            "Check that the barcode files correspond to the current KWIC CSV."
+        )
+
+    # Second pass: concatenate diagrams and build metadata rows
+    for part_file, part_num, part_diagrams in loaded_parts:
+        part_keys = list(part_diagrams.keys())
+        part_n = len(part_diagrams[part_keys[0]])
 
         # Concatenate into all_diagrams
         if not all_diagrams:
@@ -284,16 +307,6 @@ def load_lang_barcodes(
                 "source_part": part_num,
             })
             global_sample_idx += 1
-
-    # Validate total count matches KWIC
-    total_samples = global_sample_idx
-    if total_samples != len(kwic_df):
-        raise ValueError(
-            f"Barcode sample count ({total_samples}) does not match KWIC CSV row count "
-            f"({len(kwic_df)}) for ({lang!r}, {domain!r}). "
-            "This indicates a mismatch between the ripser run and the KWIC data. "
-            "Check that the barcode files correspond to the current KWIC CSV."
-        )
 
     metadata = pd.DataFrame(metadata_rows)
     return all_diagrams, metadata

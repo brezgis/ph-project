@@ -209,7 +209,7 @@ class TestLoadBarcodeJson:
         fpath.write_text(json.dumps(raw))
         result = load_barcode_json(fpath)
         arr = result[(0, 0)][0][1]
-        assert arr.shape == (0, 2) or (arr.ndim == 1 and arr.shape[0] == 0) or arr.shape[1] == 2
+        assert arr.shape == (0, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +297,11 @@ class TestLoadLangBarcodes:
         # Total samples must match sum of all parts
         assert len(metadata) == 6, f"Expected 6 metadata rows, got {len(metadata)}"
 
+        # Parts must be concatenated in ascending numeric order: 4 rows from part1, then 2 from part2
+        assert metadata["source_part"].tolist() == [1] * 4 + [2] * 2, (
+            f"Expected parts in order [1,1,1,1,2,2], got {metadata['source_part'].tolist()}"
+        )
+
     def test_sample_count_validates(self, tmp_path):
         """load_lang_barcodes must validate that total barcode count == KWIC row count."""
         _require_import()
@@ -321,7 +326,7 @@ class TestLoadLangBarcodes:
         })
         kwic_df.to_csv(kwic_dir / "color.csv", index=False)
 
-        with pytest.raises(Exception):  # ValueError or AssertionError
+        with pytest.raises(ValueError):
             load_lang_barcodes(
                 barcode_dir=tmp_path,
                 lang="en",
@@ -330,6 +335,142 @@ class TestLoadLangBarcodes:
                 max_len=32,
                 n_layers=1,
                 kwic_dir=str(tmp_path / "kwic"),
+            )
+
+    def test_sentence_idx_within_term_is_sequential(self, tmp_path):
+        """sentence_idx_within_term must be [0, 1, 2, ...] per term.
+
+        Uses a synthetic KWIC CSV with two terms in non-interleaved layout
+        (all rows for 'red' first, then all for 'blue') and verifies that
+        per-term sentence indices are contiguous starting from 0.
+
+        Also tests the non-contiguous case: a KWIC CSV where terms alternate
+        so that 'red' rows appear at global positions 0, 2, 4 — the per-term
+        counter must still produce [0, 1, 2], not [0, 2, 4].
+        """
+        _require_import()
+        import json
+
+        def _setup_and_load(tmp_p, kwic_df, n_samples):
+            raw = _make_synthetic_barcodes(n_layers=1, n_heads=1, n_samples=n_samples)
+            fname = (
+                "en_color_all_heads_1_layers_MAX_LEN_32_"
+                "bert-base-multilingual-cased_part1of1.json"
+            )
+            (tmp_p / fname).write_text(json.dumps(raw))
+            kwic_dir = tmp_p / "kwic" / "en"
+            kwic_dir.mkdir(parents=True)
+            kwic_df.to_csv(kwic_dir / "color.csv", index=False)
+            return load_lang_barcodes(
+                barcode_dir=tmp_p,
+                lang="en",
+                domain="color",
+                model_tag="bert-base-multilingual-cased",
+                max_len=32,
+                n_layers=1,
+                kwic_dir=str(tmp_p / "kwic"),
+            )
+
+        # --- Case 1: contiguous layout (all red rows, then all blue rows) ---
+        kwic_contiguous = pd.DataFrame({
+            "term": ["red", "red", "red", "blue", "blue"],
+            "labels": ["red"] * 5,
+            "sentence": [f"s{i}" for i in range(5)],
+            "target_idx": range(5),
+            "corpus_source": ["test"] * 5,
+        })
+        tmp1 = tmp_path / "contiguous"
+        tmp1.mkdir()
+        _, meta1 = _setup_and_load(tmp1, kwic_contiguous, n_samples=5)
+
+        red_idxs1 = meta1[meta1["term"] == "red"]["sentence_idx_within_term"].tolist()
+        blue_idxs1 = meta1[meta1["term"] == "blue"]["sentence_idx_within_term"].tolist()
+        assert red_idxs1 == [0, 1, 2], (
+            f"Contiguous layout: expected red sentence_idx_within_term [0,1,2], got {red_idxs1}"
+        )
+        assert blue_idxs1 == [0, 1], (
+            f"Contiguous layout: expected blue sentence_idx_within_term [0,1], got {blue_idxs1}"
+        )
+
+        # --- Case 2: alternating layout (red, blue, red, blue, red) ---
+        # red appears at global positions 0, 2, 4; blue at 1, 3
+        kwic_alternating = pd.DataFrame({
+            "term": ["red", "blue", "red", "blue", "red"],
+            "labels": ["red"] * 5,
+            "sentence": [f"s{i}" for i in range(5)],
+            "target_idx": range(5),
+            "corpus_source": ["test"] * 5,
+        })
+        tmp2 = tmp_path / "alternating"
+        tmp2.mkdir()
+        _, meta2 = _setup_and_load(tmp2, kwic_alternating, n_samples=5)
+
+        red_idxs2 = meta2[meta2["term"] == "red"]["sentence_idx_within_term"].tolist()
+        blue_idxs2 = meta2[meta2["term"] == "blue"]["sentence_idx_within_term"].tolist()
+        assert red_idxs2 == [0, 1, 2], (
+            f"Alternating layout: expected red sentence_idx_within_term [0,1,2], got {red_idxs2}"
+        )
+        assert blue_idxs2 == [0, 1], (
+            f"Alternating layout: expected blue sentence_idx_within_term [0,1], got {blue_idxs2}"
+        )
+
+    def test_missing_barcode_dir_raises_file_not_found(self, tmp_path):
+        """load_lang_barcodes raises FileNotFoundError when barcode dir has no matching files."""
+        _require_import()
+
+        # Create a valid KWIC CSV so the error is from missing barcode files, not KWIC
+        kwic_dir = tmp_path / "kwic" / "en"
+        kwic_dir.mkdir(parents=True)
+        kwic_df = pd.DataFrame({
+            "term": ["red"],
+            "labels": ["red"],
+            "sentence": ["s0"],
+            "target_idx": [0],
+            "corpus_source": ["test"],
+        })
+        kwic_df.to_csv(kwic_dir / "color.csv", index=False)
+
+        # Empty barcode dir — no matching JSON files
+        empty_barcode_dir = tmp_path / "empty_barcodes"
+        empty_barcode_dir.mkdir()
+
+        with pytest.raises(FileNotFoundError, match="No barcode files found"):
+            load_lang_barcodes(
+                barcode_dir=empty_barcode_dir,
+                lang="en",
+                domain="color",
+                model_tag="bert-base-multilingual-cased",
+                max_len=32,
+                n_layers=1,
+                kwic_dir=str(tmp_path / "kwic"),
+            )
+
+    def test_missing_kwic_csv_raises_file_not_found(self, tmp_path):
+        """load_lang_barcodes raises FileNotFoundError when the KWIC CSV is absent."""
+        _require_import()
+        import json
+
+        # Create a valid barcode file so the error is from missing KWIC, not barcodes
+        raw = _make_synthetic_barcodes(n_layers=1, n_heads=1, n_samples=3)
+        fname = (
+            "en_color_all_heads_1_layers_MAX_LEN_32_"
+            "bert-base-multilingual-cased_part1of1.json"
+        )
+        (tmp_path / fname).write_text(json.dumps(raw))
+
+        # Point kwic_dir at an empty directory — color.csv does not exist
+        empty_kwic = tmp_path / "empty_kwic"
+        empty_kwic.mkdir()
+
+        with pytest.raises(FileNotFoundError):
+            load_lang_barcodes(
+                barcode_dir=tmp_path,
+                lang="en",
+                domain="color",
+                model_tag="bert-base-multilingual-cased",
+                max_len=32,
+                n_layers=1,
+                kwic_dir=str(empty_kwic),
             )
 
 
