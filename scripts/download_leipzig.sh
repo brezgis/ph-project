@@ -41,8 +41,8 @@
 # If a value is still a TODO placeholder this script computes and PRINTS
 # the actual hash of the downloaded tarball rather than silently accepting
 # it.  Populate the values after the first successful download to pin them.
-# The 3 × 2020 hashes are pre-populated; the 2019 and 2023 hashes are
-# TODO and will be printed on first run.
+# All 9 hashes are currently pinned; TODO handling is retained so a future
+# corpus addition can be verified before its hash is captured.
 #
 # Usage
 # -----

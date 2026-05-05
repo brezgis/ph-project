@@ -220,10 +220,10 @@ def extract_kwic(
         head_lemma_to_term_idxs[head_lemma].append((term_idx, head_offset))
 
     # ------------------------------------------------------------------
-    # 3. Per-term hit accumulator: term_idx → list of (kwic_str, head_ws_idx)
+    # 3. Per-term hit accumulator: term_idx → list of
+    #    (kwic_str, target_idx_in_kwic, corpus_source_id)
     # ------------------------------------------------------------------
-    # hits[term_idx] = list of (kwic_str, target_idx_in_kwic)
-    hits: dict[int, list[tuple[str, int]]] = {i: [] for i in range(len(terms))}
+    hits: dict[int, list[tuple[str, int, str]]] = {i: [] for i in range(len(terms))}
     # n_corpus_hits[term_idx] — count BEFORE dedup
     n_corpus_hits: dict[int, int] = {i: 0 for i in range(len(terms))}
 

@@ -59,7 +59,7 @@ _COMPLIANT_ROWS = [
 _COMPLIANT_SIDECAR: dict = {
     "language": _LANG,
     "domain": _DOMAIN,
-    "corpus_source": _CORPUS_SOURCE,
+    "corpus_source": [_CORPUS_SOURCE],
     "corpus_total_sentences": 1000000,
     "extracted_at": "2026-05-04T01:00:00Z",
     "seed": 0,

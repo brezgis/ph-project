@@ -67,8 +67,8 @@ Columns are fixed:
   cheap to record and load-bearing for any per-target analysis we add
   later.
 * `corpus_source` lets us trace any sentence back to its corpus of
-  origin. We pin a single corpus per language for now; the column
-  exists so a future mixed-genre run does not require schema migration.
+  origin. Each row records the originating Leipzig ID for its sentence;
+  multi-corpus extractions produce rows with multiple distinct values.
 
 No `domain` or `language` column: those are encoded in the file path,
 and adding them per-row is redundant when the entire file shares them.
