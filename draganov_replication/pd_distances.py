@@ -98,7 +98,7 @@ _PI_SIGMA = 0.1
 # (ports of Draganov run_compute_pd_distances.py:59-108; names preserved)
 # ---------------------------------------------------------------------------
 
-def vectorise_persistence_image(pd: np.ndarray, dim: int) -> np.ndarray:
+def vectorise_persistence_image(diagram: np.ndarray, dim: int) -> np.ndarray:
     """Vectorise a persistence diagram via persim.PersistenceImager.
 
     Reproduces ``draganov/B run_compute_pd_distances.py:59-69``.
@@ -106,7 +106,7 @@ def vectorise_persistence_image(pd: np.ndarray, dim: int) -> np.ndarray:
 
     Parameters
     ----------
-    pd:
+    diagram:
         Shape ``(n, 2)`` float array of ``[birth, death]`` pairs.  May be
         empty (returns a zero vector of the same shape as a non-empty PD).
     dim:
@@ -142,14 +142,14 @@ def vectorise_persistence_image(pd: np.ndarray, dim: int) -> np.ndarray:
         kernel_params={"sigma": [[_PI_SIGMA, 0], [0, _PI_SIGMA]]},
     )
 
-    if len(pd) == 0:
+    if len(diagram) == 0:
         # Return a zero vector matching the imager's output size.
         # Compute shape on a dummy diagram, then return zeros.
         dummy = np.array([[0.0, 0.1]])
         dummy_img = pi_transformer.transform([dummy])[0]
         return np.zeros(dummy_img.size, dtype=np.float64)
 
-    img = pi_transformer.transform([pd])[0]
+    img = pi_transformer.transform([diagram])[0]
     return img.flatten()
 
 
@@ -166,7 +166,7 @@ def _entropy(values: np.ndarray) -> float:
     return float(np.log(total) - entropy_unnorm / total)
 
 
-def vectorise_bars_statistics(pd: np.ndarray, only_death: bool = False) -> np.ndarray:
+def vectorise_bars_statistics(diagram: np.ndarray, only_death: bool = False) -> np.ndarray:
     """Compute a 10- or 40-dimensional statistics vector from a persistence diagram.
 
     Reproduces ``draganov/B run_compute_pd_distances.py:80-108``.
@@ -178,7 +178,7 @@ def vectorise_bars_statistics(pd: np.ndarray, only_death: bool = False) -> np.nd
 
     Parameters
     ----------
-    pd:
+    diagram:
         Shape ``(n, 2)`` float array of ``[birth, death]`` pairs.  Empty arrays
         are handled gracefully: each empty quantity falls back to ``np.zeros(1)``
         (matching Draganov's guard).
@@ -220,13 +220,13 @@ def vectorise_bars_statistics(pd: np.ndarray, only_death: bool = False) -> np.nd
 
     for quantity_label in sorted(quantities.keys()):
         quantity = quantities[quantity_label]
-        if len(pd) == 0:
+        if len(diagram) == 0:
             values = np.zeros(1, dtype=np.float64)
         else:
             values = np.fromiter(
-                (quantity(b, d) for b, d in pd),
+                (quantity(b, d) for b, d in diagram),
                 dtype=np.float64,
-                count=len(pd),
+                count=len(diagram),
             )
             if len(values) == 0:
                 values = np.zeros(1, dtype=np.float64)
@@ -302,6 +302,12 @@ def _bottleneck_matrix(
     from replication.giotto_format import to_giotto_format
 
     n = len(pds)
+
+    # If every PD is empty for this dim, to_giotto_format would produce a
+    # zero-feature array and PairwiseDistance.fit_transform would raise on
+    # the empty stack. Distances between empty diagrams are all 0.
+    if all(len(pd_arr) == 0 for pd_arr in pds):
+        return np.zeros((n, n), dtype=np.float64)
 
     # Wrap each PD as a dict[int, np.ndarray] so to_giotto_format is satisfied.
     # Each "sample" is {dim: (n_features, 2)} — only one dim per PD here.

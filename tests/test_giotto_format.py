@@ -238,6 +238,9 @@ class TestKeyErrorOnMissingLayerHead:
         diagrams = _make_unequal_diagrams()
         indices = np.array([0, 1])
 
-        # Should not raise
+        # Should not raise; produced a (n_samples, n_features, 3) array.
         result = to_giotto_format(diagrams, indices, layer=0, head=0, dims=(0, 1))
-        assert result is not None
+        assert isinstance(result, np.ndarray)
+        assert result.ndim == 3
+        assert result.shape[0] == 2
+        assert result.shape[2] == 3

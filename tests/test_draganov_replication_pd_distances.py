@@ -22,6 +22,7 @@ import os
 import pathlib
 
 import numpy as np
+import pandas as pd
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -32,21 +33,10 @@ REQUIRE = os.environ.get("PH_REQUIRE_DRAGANOV_PD_DISTANCES") == "1"
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# data/phase3/ is gitignored but lives on the local filesystem.
-# In worktree checkouts the data may be in the main checkout at ph-project/;
-# fall back to the main checkout if the worktree doesn't have it.
-_MAIN_CHECKOUT = pathlib.Path("/home/anna/ph-project")
-
-def _find_data_dir(rel: str) -> pathlib.Path:
-    """Return the first existing parent for a data sub-path, or the worktree path."""
-    for root in (REPO_ROOT, _MAIN_CHECKOUT):
-        candidate = root / rel
-        if candidate.exists():
-            return candidate
-    return REPO_ROOT / rel  # not found; tests will skip/fail gracefully
-
-PD_DISTANCES_DIR = _find_data_dir("data/phase3/draganov_pd_distances")
-POINTCLOUDS_DIR = _find_data_dir("data/phase3/draganov_pointclouds")
+# data/phase3/ is gitignored. Gated tests (PH_REQUIRE_DRAGANOV_PD_DISTANCES=1)
+# require the cache to be built locally first; ungated tests do not need data.
+PD_DISTANCES_DIR = REPO_ROOT / "data" / "phase3" / "draganov_pd_distances"
+POINTCLOUDS_DIR = REPO_ROOT / "data" / "phase3" / "draganov_pointclouds"
 
 DISTANCES = ("bottleneck", "sliced_wasserstein", "persistence_image", "bars_statistics")
 DIMS = (0, 1)
@@ -169,6 +159,20 @@ def test_persistence_image_smoke():
         )
 
 
+def test_persistence_image_empty_pd():
+    """Empty PD does not raise; returns a flat finite zero vector.
+
+    Real (lang, term) cells with sparse H_1 features can hit this branch.
+    """
+    _require_import()
+    empty_pd = np.empty((0, 2), dtype=np.float64)
+    for dim in (0, 1):
+        vec = vectorise_persistence_image(empty_pd, dim=dim)
+        assert vec.ndim == 1, f"Expected 1-D vector for empty PD, got ndim={vec.ndim}"
+        assert np.all(np.isfinite(vec)), "Empty PD produced non-finite values"
+        assert np.all(vec == 0.0), "Empty PD vector should be all zeros"
+
+
 # ---------------------------------------------------------------------------
 # Error path tests (not gated)
 # ---------------------------------------------------------------------------
@@ -191,7 +195,6 @@ def test_compute_grid_missing_manifest_raises(tmp_path: pathlib.Path):
 
 def test_compute_grid_invalid_distance_raises(tmp_path: pathlib.Path):
     """compute_pd_distance_grid raises ValueError for an unrecognised distance name."""
-    import pandas as pd
     _require_import()
 
     diag_dir = tmp_path / "diagrams"
