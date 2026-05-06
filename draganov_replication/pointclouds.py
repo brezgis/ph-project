@@ -14,7 +14,6 @@ from __future__ import annotations
 import glob
 import logging
 import pathlib
-import re
 import warnings
 from typing import Any
 
@@ -219,7 +218,7 @@ def build_pointclouds(
 
             if out_npy.exists() and not overwrite:
                 # Read shape from existing file to populate manifest row.
-                arr = np.load(out_npy)
+                arr = np.load(out_npy, mmap_mode="r")
                 n_samples = arr.shape[0]
                 logger.debug("Skipping existing: %s (n=%d)", out_npy, n_samples)
             else:

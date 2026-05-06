@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-import tempfile
 
 import numpy as np
 import pandas as pd
@@ -77,9 +76,6 @@ def test_canon_term_coverage():
     if not _pointclouds_ready():
         _skip_or_fail(f"draganov_pointclouds not built yet: {POINTCLOUD_DIR}")
 
-    manifest = _load_manifest()
-    built_files = {row["file"] for _, row in manifest.iterrows()}
-
     for lang in ("en", "ru", "es"):
         terms = _load_canon_terms(lang)
         for term in terms:
@@ -103,7 +99,7 @@ def test_pointcloud_shape():
     assert len(manifest) > 0, "manifest.csv is empty"
 
     for _, row in manifest.iterrows():
-        npy_path = pathlib.Path(row["file"])
+        npy_path = POINTCLOUD_DIR / pathlib.Path(row["file"]).name
         assert npy_path.exists(), f"manifest references missing file: {npy_path}"
         arr = np.load(npy_path)
         assert arr.ndim == 2, (
@@ -255,3 +251,120 @@ def test_pooling_correctness(tmp_path: pathlib.Path):
             "np.mean(emb[offset, ws:we+1], axis=0).astype(float32)"
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Synthetic fixture helper for skip-path tests
+# ---------------------------------------------------------------------------
+
+def _write_synthetic_fixture(
+    tmp_path: pathlib.Path,
+    rows: list[dict],
+    max_len: int = 8,
+) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    """Write a minimal embeddings/manifest/canon fixture for a single en/blue cell.
+
+    Returns (emb_dir, canon_dir, out_dir).  Each row in *rows* must contain
+    target_wp_start, target_wp_end, embedding_part, embedding_offset.
+    The embedding npy has shape (n_offsets, max_len, 768) populated with
+    deterministic random values.
+    """
+    HIDDEN = 768
+    n_offsets = max((r["embedding_offset"] for r in rows), default=0) + 1
+    rng = np.random.default_rng(0)
+    emb = rng.standard_normal((n_offsets, max_len, HIDDEN)).astype(np.float16)
+
+    emb_dir = tmp_path / "embeddings"
+    emb_dir.mkdir()
+    npy_name = (
+        f"en_color_final_layer_MAX_LEN_{max_len}"
+        "_bert-base-multilingual-cased_part1of1.npy"
+    )
+    np.save(emb_dir / npy_name, emb)
+
+    manifest_df = pd.DataFrame(
+        [
+            {
+                "kwic_row_id": i,
+                "lang": "en",
+                "domain": "color",
+                "term": "blue",
+                "target_idx": 3,
+                **r,
+            }
+            for i, r in enumerate(rows)
+        ]
+    )
+    manifest_df.to_parquet(emb_dir / "en_color_manifest.parquet", index=False)
+
+    canon_dir = tmp_path / "canon-terms"
+    (canon_dir / "en").mkdir(parents=True)
+    canon_yaml = {"domain": "color", "language": "en", "terms": [{"term": "blue"}]}
+    with open(canon_dir / "en" / "color.yaml", "w") as f:
+        yaml.dump(canon_yaml, f)
+
+    return emb_dir, canon_dir, tmp_path / "draganov_pointclouds"
+
+
+def test_negative_wp_skipped_with_warning(tmp_path: pathlib.Path):
+    """Rows with negative target_wp_start/end are skipped with UserWarning."""
+    _require_import()
+    rows = [
+        {"target_wp_start": -1, "target_wp_end": -1,
+         "embedding_part": 1, "embedding_offset": 0},
+        {"target_wp_start": 2, "target_wp_end": 4,
+         "embedding_part": 1, "embedding_offset": 1},
+    ]
+    emb_dir, canon_dir, out_dir = _write_synthetic_fixture(tmp_path, rows)
+
+    with pytest.warns(UserWarning, match="negative"):
+        result = build_pointclouds(
+            emb_dir=emb_dir, canon_dir=canon_dir, out_dir=out_dir,
+            langs=("en",), domain="color", overwrite=False,
+        )
+
+    assert result["n_samples"].iloc[0] == 1, (
+        "Expected the negative-WP row to be skipped, leaving 1 sample."
+    )
+
+
+def test_empty_span_skipped_with_warning(tmp_path: pathlib.Path):
+    """Rows with we < ws (empty inclusive span) are skipped with UserWarning."""
+    _require_import()
+    rows = [
+        # ws=4, we=2 → emb[0, 4:3, :] has shape (0, 768) → empty span branch
+        {"target_wp_start": 4, "target_wp_end": 2,
+         "embedding_part": 1, "embedding_offset": 0},
+        {"target_wp_start": 2, "target_wp_end": 4,
+         "embedding_part": 1, "embedding_offset": 1},
+    ]
+    emb_dir, canon_dir, out_dir = _write_synthetic_fixture(tmp_path, rows)
+
+    with pytest.warns(UserWarning, match="empty WP span"):
+        result = build_pointclouds(
+            emb_dir=emb_dir, canon_dir=canon_dir, out_dir=out_dir,
+            langs=("en",), domain="color", overwrite=False,
+        )
+
+    assert result["n_samples"].iloc[0] == 1, (
+        "Expected the empty-span row to be skipped, leaving 1 sample."
+    )
+
+
+def test_all_rows_skipped_raises(tmp_path: pathlib.Path):
+    """If every row in a (lang, term) cell has invalid spans, build_pointclouds raises."""
+    _require_import()
+    rows = [
+        {"target_wp_start": -1, "target_wp_end": -1,
+         "embedding_part": 1, "embedding_offset": 0},
+        {"target_wp_start": -1, "target_wp_end": -1,
+         "embedding_part": 1, "embedding_offset": 1},
+    ]
+    emb_dir, canon_dir, out_dir = _write_synthetic_fixture(tmp_path, rows)
+
+    with pytest.warns(UserWarning):
+        with pytest.raises(ValueError, match="were skipped"):
+            build_pointclouds(
+                emb_dir=emb_dir, canon_dir=canon_dir, out_dir=out_dir,
+                langs=("en",), domain="color", overwrite=False,
+            )
