@@ -50,6 +50,17 @@ from baselines.topology import rips_barcode
 
 logger = logging.getLogger(__name__)
 
+_BARCODE_DTYPE = np.dtype([("birth", "f8"), ("death", "f8")])
+
+
+def _to_plain(sa: np.ndarray) -> np.ndarray:
+    """Structured array with 'birth'/'death' fields → (n, 2) float64."""
+    if len(sa) == 0:
+        return np.empty((0, 2), dtype=np.float64)
+    return np.column_stack(
+        [sa["birth"].astype(np.float64), sa["death"].astype(np.float64)]
+    )
+
 
 def compute_diagrams(
     pointcloud_dir: pathlib.Path = pathlib.Path("data/phase3/draganov_pointclouds"),
@@ -86,8 +97,11 @@ def compute_diagrams(
         ``{lang}_{term}.npz`` per cell plus ``manifest.csv``.
     max_dim:
         Maximum homology dimension passed to ripser.  ``1`` gives H_0
-        (connected components) and H_1 (loops), matching Draganov's
-        default.
+        (connected components) and H_1 (loops), matching the H_0+H_1
+        scope locked at planning time for this study.  Draganov's
+        ``2-point_clouds_to_persistence_bars.sh`` runs at ``MAXDIM=2``;
+        we drop H_2 because it is not used downstream and significantly
+        increases ripser cost.
     overwrite:
         When ``False`` (default), skip cells whose ``.npz`` already
         exists.  Pass ``True`` to force regeneration.
@@ -154,16 +168,8 @@ def compute_diagrams(
 
             # Step 3 (← Draganov ripser_output_to_bars.py)
             # Convert structured arrays to plain (n, 2) float64.
-            def _to_plain(sa: np.ndarray) -> np.ndarray:
-                """Structured array with 'birth'/'death' fields → (n, 2) float64."""
-                if len(sa) == 0:
-                    return np.empty((0, 2), dtype=np.float64)
-                return np.column_stack(
-                    [sa["birth"].astype(np.float64), sa["death"].astype(np.float64)]
-                )
-
             h0 = _to_plain(bc[0])
-            h1 = _to_plain(bc.get(1, np.empty(0, dtype=[("birth", "f8"), ("death", "f8")])))
+            h1 = _to_plain(bc.get(1, np.empty(0, dtype=_BARCODE_DTYPE)))
 
             np.savez(
                 out_npz,

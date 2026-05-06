@@ -123,12 +123,23 @@ def test_synthetic_pointcloud(tmp_path: pathlib.Path):
     assert npz_path.exists(), f"Expected .npz at {npz_path}"
 
     d = np.load(npz_path)
+    h0 = d["h0"]
     h1 = d["h1"]
     assert h1.ndim == 2, f"h1 should be 2D, got ndim={h1.ndim}"
     assert h1.shape[1] == 2, f"h1 should have 2 columns (birth, death), got {h1.shape[1]}"
     assert len(h1) >= 1, (
         "H_1 barcode for a 10-point ring should have at least one bar "
         f"(the loop); got {len(h1)} bars"
+    )
+    # H_0 and H_1 counts must match topology — guards against an h0/h1 swap.
+    # Vietoris-Rips on N=10 connected points yields exactly N-1=9 finite H_0 bars
+    # (one infinite component is stripped by rips_barcode).  A ring has a single
+    # 1-cycle, so H_1 should be small (≤3 even with numerical noise).
+    assert len(h0) == 9, (
+        f"H_0 should have N-1=9 finite bars for 10 connected points; got {len(h0)}"
+    )
+    assert len(h1) <= 3, (
+        f"H_1 should have ~1 bar for a ring (allow up to 3 for noise); got {len(h1)}"
     )
     # The ring should have a persistent H_1 bar with non-trivial persistence
     max_persistence = float(np.max(h1[:, 1] - h1[:, 0]))
