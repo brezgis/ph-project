@@ -760,6 +760,56 @@ def load_distance_tensor(
 # Permutation test helpers
 # ---------------------------------------------------------------------------
 
+def _per_domain_test_statistic_from_arrays(
+    dists_upper: np.ndarray,
+    between_mask: np.ndarray,
+    total_sum: float,
+    n_pairs: int,
+) -> float:
+    """Compute the per-domain test statistic from pre-extracted upper-triangle arrays.
+
+    This is the inner-loop kernel used by both ``per_domain_test_statistic``
+    (public API, delegates here after extracting arrays) and
+    ``permutation_test_per_domain`` (computes the observed statistic once
+    before running the vectorised null distribution).
+
+    Computing from pre-extracted arrays avoids rebuilding the full N×N mask
+    and re-indexing the distance matrix on every call.  All three per-cell
+    invariants (``dists_upper``, ``total_sum``, ``n_pairs``) are computed
+    once outside the loop; only ``between_mask`` changes per permutation.
+
+    Parameters
+    ----------
+    dists_upper:
+        1-D float array of upper-triangle distances, length ``n_pairs``.
+        Produced by ``distance_matrix[triu_i, triu_j]``.
+    between_mask:
+        1-D bool array of length ``n_pairs``.  ``True`` where the two
+        samples belong to different languages.
+    total_sum:
+        ``dists_upper.sum()`` — precomputed once per cell so that
+        ``within_sum = total_sum - between_sum`` avoids a second dot product.
+    n_pairs:
+        ``len(dists_upper)`` — number of upper-triangle pairs.
+
+    Returns
+    -------
+    float
+        ``mean(between-language pair distances) − mean(within-language pair
+        distances)``.  If either set is empty the missing mean defaults to
+        ``0.0``.
+    """
+    between_sum = float(np.dot(between_mask, dists_upper))
+    between_count = int(between_mask.sum())
+    within_sum = total_sum - between_sum
+    within_count = n_pairs - between_count
+
+    mean_between = between_sum / between_count if between_count > 0 else 0.0
+    mean_within = within_sum / within_count if within_count > 0 else 0.0
+
+    return mean_between - mean_within
+
+
 def per_domain_test_statistic(
     distance_matrix: np.ndarray,
     metadata_df: pd.DataFrame,
@@ -793,27 +843,33 @@ def per_domain_test_statistic(
     pairs, consistent with the permutation null distribution computation.
     The cross-language mask is built via broadcasting:
     ``lang_vec[:, None] != lang_vec[None, :]``.
+
+    Delegates to ``_per_domain_test_statistic_from_arrays`` after extracting
+    the upper-triangle arrays, so the inner arithmetic is shared with the
+    vectorised permutation loop.
     """
     lang_vec = metadata_df["lang"].values
-    between_mask = lang_vec[:, None] != lang_vec[None, :]
-    within_mask = lang_vec[:, None] == lang_vec[None, :]
-
-    # Use upper-triangle only to avoid double-counting (diagonal excluded)
     n = len(lang_vec)
-    triu_idx = np.triu_indices(n, k=1)
+    triu_i, triu_j = np.triu_indices(n, k=1)
 
-    between_upper = between_mask[triu_idx]
-    within_upper = within_mask[triu_idx]
+    dists_upper = distance_matrix[triu_i, triu_j]
+    total_sum = float(dists_upper.sum())
+    n_pairs = len(dists_upper)
+    between_mask = lang_vec[triu_i] != lang_vec[triu_j]
 
-    dists_upper = distance_matrix[triu_idx]
+    return _per_domain_test_statistic_from_arrays(
+        dists_upper=dists_upper,
+        between_mask=between_mask,
+        total_sum=total_sum,
+        n_pairs=n_pairs,
+    )
 
-    between_dists = dists_upper[between_upper]
-    within_dists = dists_upper[within_upper]
 
-    mean_between = float(between_dists.mean()) if len(between_dists) > 0 else 0.0
-    mean_within = float(within_dists.mean()) if len(within_dists) > 0 else 0.0
-
-    return mean_between - mean_within
+# Target peak memory per chunk for the (chunk_size, n_pairs) float32 matrix.
+# 500 MB / 4 bytes per float32 = 125 M elements.  With n_pairs ~ 230k for
+# N=680, chunk_size = 125M / 230k ≈ 540.  We cap at 256 to be safe and to
+# keep BLAS working set in L3 cache.
+_CHUNK_SIZE_DEFAULT = 256
 
 
 def permutation_test_per_domain(
@@ -821,13 +877,15 @@ def permutation_test_per_domain(
     metadata_df: pd.DataFrame,
     K: int = 10000,
     seed: int = 42,
+    _chunk_size: int = _CHUNK_SIZE_DEFAULT,
 ) -> dict:
     """Permutation test: are between-language distances larger than within-language?
 
-    Shuffles the ``lang`` label vector ``K`` times and recomputes the test
-    statistic (``per_domain_test_statistic``) each time to build the null
-    distribution. Returns the observed statistic, null distribution, two-tailed
-    p-value, and effect size (z-score under the null).
+    Shuffles the ``lang`` label vector ``K`` times and builds the null
+    distribution via a BLAS-accelerated matrix multiplication over all
+    permutations at once (chunked to stay under ~500 MB peak memory).
+    Returns the observed statistic, null distribution, two-tailed p-value,
+    and effect size (z-score under the null).
 
     Parameters
     ----------
@@ -839,6 +897,9 @@ def permutation_test_per_domain(
         Number of permutations. Default 10000.
     seed:
         Random seed for ``np.random.default_rng``. Default 42.
+    _chunk_size:
+        Number of permutations to process per BLAS chunk.  Default 256.
+        Exposed for testing; production code uses the default.
 
     Returns
     -------
@@ -860,23 +921,96 @@ def permutation_test_per_domain(
     (Phipson & Smyth 2010): ``(B + 1) / (K + 1)`` where B is the count of
     null statistics at least as extreme as observed (in absolute deviation from
     the null mean).
+
+    **Vectorisation strategy** (Optimization 1 + 2 from ph-project-chz):
+
+    *Optimization 1 — cache per-cell invariants:*
+    Upper-triangle indices, ``dists_upper``, ``total_sum``, and ``n_pairs``
+    are computed once.  The per-permutation between-mask uses only the
+    ~n_pairs upper-triangle entries (not the full N×N matrix).
+
+    *Optimization 2 — BLAS matmul across K permutations:*
+    All K shuffled label vectors are generated upfront as a (K, N) matrix.
+    The between-masks for all permutations are stacked into a
+    (chunk_size, n_pairs) float32 matrix and multiplied against the
+    (n_pairs,) ``dists_upper`` vector in one BLAS call per chunk:
+    ``between_sums = between_masks @ dists_upper``.  BLAS uses SIMD and
+    multi-core threading, replacing K small Python-loop numpy calls with
+    one cache-blocked operation per chunk.
+
+    The null array VALUES differ from the old Python-loop implementation
+    because batched RNG generation consumes the stream in a different order
+    than K sequential ``rng.permutation()`` calls.  This is expected and
+    statistically valid — p-value and effect_size match within Monte-Carlo
+    noise.
     """
     rng = np.random.default_rng(seed)
     lang_vec = metadata_df["lang"].values.copy()
     n = len(lang_vec)
 
-    observed = per_domain_test_statistic(distance_matrix, metadata_df)
+    # --- Per-cell invariants (computed once) ---
+    triu_i, triu_j = np.triu_indices(n, k=1)
+    dists_upper = distance_matrix[triu_i, triu_j]
+    total_sum = float(dists_upper.sum())
+    n_pairs = len(dists_upper)
+
+    # Observed statistic on the unshuffled labels
+    between_mask_obs = lang_vec[triu_i] != lang_vec[triu_j]
+    observed = _per_domain_test_statistic_from_arrays(
+        dists_upper=dists_upper,
+        between_mask=between_mask_obs,
+        total_sum=total_sum,
+        n_pairs=n_pairs,
+    )
+
+    # --- Generate all K permutations upfront as a (K, n) integer-coded array ---
+    # Use a compact integer encoding to keep the permutation matrix small before
+    # expanding to between-masks.
+    lang_int = np.unique(lang_vec, return_inverse=True)[1].astype(np.int16)
+    shuffled_all = np.empty((K, n), dtype=np.int16)
+    for k in range(K):
+        shuffled_all[k] = rng.permutation(lang_int)
+
+    # Upper-triangle column indices for left/right of each pair — shape (n_pairs,)
+    left_idx = triu_i   # reuse the same arrays
+    right_idx = triu_j
+
+    # --- Chunked BLAS matmul to compute null distribution ---
+    # between_masks chunk: (chunk_size, n_pairs) float32
+    # dists_upper_f32: (n_pairs,) float32  (cast once)
+    dists_upper_f32 = dists_upper.astype(np.float32)
 
     null = np.empty(K, dtype=np.float64)
-    for k in range(K):
-        shuffled_langs = rng.permutation(lang_vec)
-        perm_meta = pd.DataFrame({"lang": shuffled_langs})
-        null[k] = per_domain_test_statistic(distance_matrix, perm_meta)
+    chunk = _chunk_size
+
+    for start in range(0, K, chunk):
+        end = min(start + chunk, K)
+        batch = shuffled_all[start:end]          # (batch_size, n)
+
+        # Build between-masks: (batch_size, n_pairs) bool → float32
+        between_masks = (batch[:, left_idx] != batch[:, right_idx]).astype(np.float32)
+
+        # BLAS dot: (batch_size, n_pairs) @ (n_pairs,) → (batch_size,)
+        between_sums = between_masks @ dists_upper_f32  # float32 accumulation
+        between_counts = between_masks.sum(axis=1)
+
+        within_sums = total_sum - between_sums.astype(np.float64)
+        within_counts = n_pairs - between_counts
+
+        # Avoid division by zero (same guard as the scalar helper).
+        # Use np.divide with the 'out' default and 'where' mask to suppress
+        # the RuntimeWarning that np.where emits (it evaluates both branches).
+        mean_between = np.zeros(len(between_counts), dtype=np.float64)
+        np.divide(between_sums, between_counts, out=mean_between, where=between_counts > 0)
+        mean_within = np.zeros(len(within_counts), dtype=np.float64)
+        np.divide(within_sums, within_counts, out=mean_within, where=within_counts > 0)
+
+        null[start:end] = mean_between - mean_within
 
     null_mean = null.mean()
     null_std = null.std()
 
-    # Two-tailed p-value with finite-K correction
+    # Two-tailed p-value with finite-K correction (Phipson & Smyth 2010)
     extreme_count = int(np.sum(np.abs(null - null_mean) >= np.abs(observed - null_mean)))
     p_value = (extreme_count + 1) / (K + 1)
 
