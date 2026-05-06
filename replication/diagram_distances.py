@@ -1008,7 +1008,14 @@ def permutation_test_per_head(
     or per-head independently.
     """
     n_layers, n_heads = distance_tensor.shape[:2]
+    total_cells = n_layers * n_heads
     rows = []
+    start_time = time.time()
+
+    logger.info(
+        f"permutation_test_per_head: starting K={K} permutations × {total_cells} "
+        f"(layer, head) cells (seed={seed}, n_samples={distance_tensor.shape[2]})"
+    )
 
     for layer in range(n_layers):
         for head in range(n_heads):
@@ -1027,11 +1034,27 @@ def permutation_test_per_head(
                 "effect_size": result["effect_size"],
             })
 
+        completed = (layer + 1) * n_heads
+        elapsed = time.time() - start_time
+        rate = elapsed / completed
+        eta = rate * (total_cells - completed)
+        logger.info(
+            f"permutation_test_per_head: layer {layer + 1}/{n_layers} done "
+            f"({completed}/{total_cells} cells, elapsed={elapsed:.1f}s, "
+            f"avg={rate:.2f}s/cell, ETA={eta:.0f}s)"
+        )
+
     df = pd.DataFrame(rows)
 
     # BH correction across all n_layers * n_heads tests simultaneously
     reject_mask = _bh_correction(df["p_value"].values, alpha=0.05)
     df["passes_bh"] = reject_mask.astype(bool)
+
+    total_elapsed = time.time() - start_time
+    logger.info(
+        f"permutation_test_per_head: complete in {total_elapsed:.1f}s "
+        f"({int(reject_mask.sum())}/{total_cells} cells pass BH at q=0.05)"
+    )
 
     return df.reset_index(drop=True)
 
