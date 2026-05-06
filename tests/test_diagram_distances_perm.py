@@ -707,31 +707,59 @@ class TestVectorizedEquivalence:
             "Refactor must not change the observed statistic formula."
         )
 
-    def test_p_value_and_effect_size_match_reference(self):
-        """p_value and effect_size must match the vectorized reference within noise.
-
-        Reference values computed with the NEW vectorized implementation
-        (seed=42, K=500, synthetic 15-sample matrix seed=1234).
-        Tolerance: 0.1 for p_value (Monte-Carlo noise at K=500),
-                   0.3 for effect_size (z-score noise at K=500).
-        """
+    def test_p_value_and_effect_size_match_old_loop(self):
+        """Old Python-loop null distribution should produce p_value and
+        effect_size within Monte-Carlo noise of the vectorized version."""
         _require_import()
-        mat, langs, meta = _make_synthetic_matrix_and_langs(seed=1234)
-        result = permutation_test_per_domain(mat, meta, K=500, seed=42)
+        # Build a small synthetic case with planted signal
+        rng = np.random.default_rng(0)
+        n = 60  # 3 langs × 20 samples
+        langs = np.array(["en"] * 20 + ["ru"] * 20 + ["es"] * 20)
+        metadata_df = pd.DataFrame({"lang": langs})
+        distance_matrix = rng.uniform(0, 1, size=(n, n))
+        distance_matrix = (distance_matrix + distance_matrix.T) / 2
+        np.fill_diagonal(distance_matrix, 0.0)
+        # Add modest planted signal so the test isn't all noise
+        for i in range(n):
+            for j in range(n):
+                if langs[i] != langs[j]:
+                    distance_matrix[i, j] += 0.1
 
-        # Reference values from the new (vectorized) implementation, seed=42, K=500.
-        # These are pinned from a known-good run of the new code.
-        # p_value and effect_size are pinned tightly (same seed → same RNG stream).
-        ref_p_value = result["p_value"]      # self-reference: same impl, same seed
-        ref_effect_size = result["effect_size"]
+        K = 2000
+        seed = 42
 
-        result2 = permutation_test_per_domain(mat, meta, K=500, seed=42)
-        assert abs(result2["p_value"] - ref_p_value) < 0.01, (
-            f"p_value not deterministic: {result2['p_value']!r} vs {ref_p_value!r}"
+        # NEW (vectorized)
+        new = permutation_test_per_domain(distance_matrix, metadata_df, K=K, seed=seed)
+
+        # OLD (Python loop, faithful to the pre-c5cb93f algorithm)
+        rng_old = np.random.default_rng(seed)
+        lang_vec = metadata_df["lang"].values
+        triu_i, triu_j = np.triu_indices(n, k=1)
+        dists_upper = distance_matrix[triu_i, triu_j]
+        null_old = np.empty(K, dtype=np.float64)
+        for k in range(K):
+            shuffled = rng_old.permutation(lang_vec)
+            between = shuffled[triu_i] != shuffled[triu_j]
+            within = ~between
+            null_old[k] = (
+                dists_upper[between].mean() - dists_upper[within].mean()
+            )
+        # observed (same on both — labels unshuffled)
+        observed_old = (
+            dists_upper[lang_vec[triu_i] != lang_vec[triu_j]].mean()
+            - dists_upper[lang_vec[triu_i] == lang_vec[triu_j]].mean()
         )
-        assert abs(result2["effect_size"] - ref_effect_size) < 0.01, (
-            f"effect_size not deterministic: {result2['effect_size']!r} vs {ref_effect_size!r}"
-        )
+        null_mean_old = null_old.mean()
+        extreme_old = int(np.sum(np.abs(null_old - null_mean_old) >= np.abs(observed_old - null_mean_old)))
+        p_value_old = (extreme_old + 1) / (K + 1)
+        effect_size_old = (observed_old - null_mean_old) / null_old.std()
+
+        # Observed stat must match exactly (same formula, same dtype path)
+        assert new["observed"] == pytest.approx(observed_old, abs=1e-12)
+        # p_value within Monte-Carlo noise — at K=2000 use abs=0.05 (loose)
+        assert new["p_value"] == pytest.approx(p_value_old, abs=0.05)
+        # effect_size within ~10% relative
+        assert new["effect_size"] == pytest.approx(effect_size_old, rel=0.10)
 
     def test_determinism_after_vectorization(self):
         """Vectorized implementation must be deterministic with the same seed."""
@@ -810,6 +838,11 @@ class TestVectorizedEquivalence:
         and chunk_size=7 (K=50 not divisible by 7 → partial last chunk of 1).
         All must return exactly K entries in null, confirming no permutations
         are dropped or duplicated at chunk boundaries.
+
+        Also verifies that p_value and effect_size are equivalent across chunk sizes —
+        cross-chunk-size differences are pure float32 accumulation noise (~3e-7 in
+        between_sums), so tolerances are generous: abs=5e-3 for p_value, rel=1e-2
+        for effect_size.
         """
         _require_import()
         try:
@@ -820,7 +853,9 @@ class TestVectorizedEquivalence:
         mat, langs, meta = _make_synthetic_matrix_and_langs(seed=42)
         K = 50
 
-        for chunk_size in [1, 7, K]:
+        chunk_sizes = [1, 7, K]
+        results = {}
+        for chunk_size in chunk_sizes:
             r = ptpd(mat, meta, K=K, seed=99, _chunk_size=chunk_size)
             assert len(r["null"]) == K, (
                 f"chunk_size={chunk_size}: expected null length {K}, got {len(r['null'])}"
@@ -830,6 +865,20 @@ class TestVectorizedEquivalence:
             )
             assert np.isfinite(r["effect_size"]), (
                 f"chunk_size={chunk_size}: effect_size is not finite: {r['effect_size']}"
+            )
+            results[chunk_size] = r
+
+        # Chunk-size invariance: p_value and effect_size must agree within float32 noise
+        ref = results[chunk_sizes[0]]
+        for chunk_size in chunk_sizes[1:]:
+            r = results[chunk_size]
+            assert r["p_value"] == pytest.approx(ref["p_value"], abs=5e-3), (
+                f"chunk_size={chunk_size}: p_value={r['p_value']!r} diverges from "
+                f"chunk_size={chunk_sizes[0]} p_value={ref['p_value']!r} (abs tol 5e-3)"
+            )
+            assert r["effect_size"] == pytest.approx(ref["effect_size"], rel=1e-2), (
+                f"chunk_size={chunk_size}: effect_size={r['effect_size']!r} diverges from "
+                f"chunk_size={chunk_sizes[0]} effect_size={ref['effect_size']!r} (rel tol 1e-2)"
             )
 
     def test_chunk_determinism_fixed_chunk_size(self):

@@ -971,10 +971,6 @@ def permutation_test_per_domain(
     for k in range(K):
         shuffled_all[k] = rng.permutation(lang_int)
 
-    # Upper-triangle column indices for left/right of each pair — shape (n_pairs,)
-    left_idx = triu_i   # reuse the same arrays
-    right_idx = triu_j
-
     # --- Chunked BLAS matmul to compute null distribution ---
     # between_masks chunk: (chunk_size, n_pairs) float32
     # dists_upper_f32: (n_pairs,) float32  (cast once)
@@ -988,7 +984,7 @@ def permutation_test_per_domain(
         batch = shuffled_all[start:end]          # (batch_size, n)
 
         # Build between-masks: (batch_size, n_pairs) bool → float32
-        between_masks = (batch[:, left_idx] != batch[:, right_idx]).astype(np.float32)
+        between_masks = (batch[:, triu_i] != batch[:, triu_j]).astype(np.float32)
 
         # BLAS dot: (batch_size, n_pairs) @ (n_pairs,) → (batch_size,)
         between_sums = between_masks @ dists_upper_f32  # float32 accumulation
