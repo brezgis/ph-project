@@ -55,3 +55,22 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Local-only: development tooling and task tracker (not part of the release)
+.beads/
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Local-only: paper sources (published separately) and frozen third-party clone
+latex/
+draganov/
+
+# Bulk per-(layer, head) figure dumps — 600+ files, regenerate via
+# scripts/kushnareva_sum_bars_per_{color,lang}.py
+results/figures/kushnareva_sum_bars_per_color/
+results/figures/kushnareva_sum_bars_per_lang/
+
+# GitHub App credentials/state — never commit
+.github-app-state.json
+*.pem
