@@ -3,7 +3,7 @@ set -euo pipefail
 
 # systemd-run -p MemorySwapMax requires cgroup v2. Bail early on
 # systems where /sys/fs/cgroup is not cgroup2fs (would silently
-# miss the swap cap, leaving north exposed).
+# miss the swap cap, leaving the host exposed).
 if [ "$(stat -fc %T /sys/fs/cgroup 2>/dev/null)" != "cgroup2fs" ]; then
   echo "ERROR: /sys/fs/cgroup is not cgroup2fs; this wrapper requires cgroup v2." >&2
   echo "       Either switch to cgroup v2 or invoke jupyter directly without the cap." >&2
@@ -11,7 +11,7 @@ if [ "$(stat -fc %T /sys/fs/cgroup 2>/dev/null)" != "cgroup2fs" ]; then
 fi
 
 # Cap kernel memory so a runaway notebook (e.g. the ripser barcode
-# loop) kills the kernel cleanly without freezing north. 48 GB
+# loop) kills the kernel cleanly without freezing the host. 48 GB
 # leaves headroom for the desktop session on a 64 GB box; tune via
 # JUPYTER_MEM_MAX env.
 MEM_MAX="${JUPYTER_MEM_MAX:-48G}"

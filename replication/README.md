@@ -2,8 +2,7 @@
 
 This directory replicates the original Kushnareva et al. (2021) pipeline as it
 was intended: **binary classification of human vs. machine-generated text**
-using topological features of BERT attention graphs. Tracked under bd issue
-[ph-project-4zo](../.beads/issues.jsonl).
+using topological features of BERT attention graphs.
 
 ## Why this exists
 
@@ -16,15 +15,15 @@ pipeline end-to-end on its native task. Three reasons:
 2. **Feature intuition** — see the actual shape and scale of the topology
    feature tensors instead of inferring them from the paper.
 3. **Reference numbers** — establish a baseline accuracy on this hardware
-   that any future port of `grab_weights.py` (issue
-   [ph-project-mwk.1](../.beads/issues.jsonl)) can be diffed against.
+   that any future port of `grab_weights.py` can be diffed against.
 
 This is **not** a project deliverable. It exists to build understanding.
 
 ## Relationship to `reference/`
 
-`reference/` holds the original Kushnareva code and is **frozen** (see project
-root CLAUDE.md). Notebooks here in `replication/notebooks/` are editable
+`reference/` holds the original Kushnareva code and is **frozen** — never
+edited (see `../reference/KUSHNAREVA_README.md` for provenance).
+Notebooks here in `replication/notebooks/` are editable
 copies — only data paths and a few small things change so the pipeline can
 actually run.
 
@@ -42,7 +41,7 @@ We start much smaller than that — see "Run order" below.
 
 ```bash
 # 0. Activate the project venv (from project root)
-cd /home/anna/ph-project
+cd /path/to/ph-project
 source .venv/bin/activate
 
 # 1. Download the raw JSONL files (~600MB total to replication/data/raw/)
@@ -68,7 +67,7 @@ runaway cell (such as the ripser barcode loop) kills only the kernel — it does
 not freeze the host.
 
 ```bash
-cd /home/anna/ph-project/replication
+cd /path/to/ph-project/replication
 bash scripts/launch_jupyter.sh            # defaults: 48 GB RAM cap, 4 GB swap cap
 ```
 
@@ -83,7 +82,8 @@ JUPYTER_MEM_MAX=32G JUPYTER_SWAP_MAX=2G bash scripts/launch_jupyter.sh
 
 **Requirement:** the host must run cgroup v2 (`stat -fc %T /sys/fs/cgroup`
 must return `cgroup2fs`). The script will exit immediately with a clear error
-on a cgroup v1 host. North satisfies this requirement.
+on a cgroup v1 host. Modern systemd-based Linux distributions satisfy this
+by default.
 
 ### Capped kernel for VS Code / Jupyter
 

@@ -190,7 +190,8 @@ class TestExtractTermVectors:
     @pytest.fixture(scope="class")
     def cc_en_kv(self):
         """Load cc.en.300.bin if present, else None."""
-        p = pathlib.Path("/home/anna/ph-project/data/fasttext/cc/cc.en.300.bin")
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        p = repo_root / "data" / "fasttext" / "cc" / "cc.en.300.bin"
         if not p.exists():
             return None
         from gensim.models.fasttext import load_facebook_model

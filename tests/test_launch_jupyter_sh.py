@@ -5,8 +5,8 @@ Tests cover:
 - Bash syntax is valid (bash -n)
 - cgroup v2 guard: script exits 1 with a clear error message on a v1-
   looking system (simulated by overriding stat output via a shim)
-- cgroup v2 guard: script does NOT bail on a cgroup2fs host (i.e. this
-  machine, north)
+- cgroup v2 guard: script does NOT bail on a cgroup2fs host (i.e. the
+  development machine)
 - JUPYTER_MEM_MAX / JUPYTER_SWAP_MAX env vars are threaded through to
   the systemd-run invocation
 
@@ -143,7 +143,7 @@ def test_cgroup_guard_fails_on_v1_system():
 
 
 def test_cgroup_guard_passes_on_v2_system():
-    """Script must NOT exit 1 on this host (north, cgroup2fs)."""
+    """Script must NOT exit 1 on a cgroup2fs host."""
     result = _run_script()  # uses real /sys/fs/cgroup stat
     assert result.returncode == 0, (
         f"Script bailed on cgroup2fs host (should not).\n"

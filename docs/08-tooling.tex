@@ -5,11 +5,11 @@ Every research project has a layer that nobody wants to write about: the environ
 
 \section{The machine}
 
-Our compute environment is a single workstation called \texttt{north}: an NVIDIA RTX 5070 Ti with 16\,GB of VRAM, backed by 64\,GB of system RAM, running Ubuntu with a Linux 6.8 kernel. The GPU is not a cluster node; it sits under a desk. This shapes every design decision downstream.
+Our compute environment is a single workstation: an NVIDIA RTX 5070 Ti with 16\,GB of VRAM, backed by 64\,GB of system RAM, running Ubuntu with a Linux 6.8 kernel. The GPU is not a cluster node; it sits under a desk. This shapes every design decision downstream.
 
 Why does 16\,GB of VRAM matter? Because mBERT's forward pass on a batch of 128-token sequences is not the bottleneck --- it fits comfortably in 4--5\,GB. The constraint bites when we run \texttt{ripserplusplus} on the GPU for barcode computation. Ripser++ allocates working memory proportional to the square of the number of vertices in the Vietoris--Rips complex it builds. On attention matrices of size $128 \times 128$, a single head's computation is small, but running many heads in sequence without proper cleanup accumulates leaked GPU memory across calls. The 16\,GB ceiling means we cannot simply throw batch size at the problem; we split, we fork, we let the OS reclaim.
 
-The 64\,GB of system RAM sounds generous until a notebook tries to hold a 4.7\,GB attention tensor in the parent process while simultaneously forking children that inherit that memory via copy-on-write. That exact scenario --- diagnosed as issue \texttt{ph-project-wz1} --- froze north multiple times before we traced the cause to parent-side array duplication via NumPy fancy indexing. The fix (spawn-context multiprocessing with child-side memory-mapped loading) works, but the episode taught us to treat RAM as a budget, not a buffer.
+The 64\,GB of system RAM sounds generous until a notebook tries to hold a 4.7\,GB attention tensor in the parent process while simultaneously forking children that inherit that memory via copy-on-write. That exact scenario --- diagnosed as issue \texttt{ph-project-wz1} --- froze the machine multiple times before we traced the cause to parent-side array duplication via NumPy fancy indexing. The fix (spawn-context multiprocessing with child-side memory-mapped loading) works, but the episode taught us to treat RAM as a budget, not a buffer.
 
 \section{The Python environment}
 
@@ -40,14 +40,14 @@ ripserplusplus @ git+https://github.com/simonzhang00/
     ripser-plusplus.git@30243c0c752de26d7fdf6e41f08bf7b840ca4744
 \end{verbatim}
 
-Building from this commit requires \texttt{nvcc} (the CUDA compiler) and a CUDA toolkit whose major version matches torch's. On north, that means CUDA 12.4 toolkit system-wide. The build takes several minutes and produces no output until it either succeeds or fails with an incomprehensible template error. We document it here so nobody else has to bisect the commit history to find the fix.
+Building from this commit requires \texttt{nvcc} (the CUDA compiler) and a CUDA toolkit whose major version matches torch's. On our workstation, that means CUDA 12.4 toolkit system-wide. The build takes several minutes and produces no output until it either succeeds or fails with an incomprehensible template error. We document it here so nobody else has to bisect the commit history to find the fix.
 
 \section{The cgroup-capped kernel}
 \label{sec:cgroup-kernel}
 
 We established that ripser's barcode loops can consume unbounded memory. The \texttt{ph-project-wz1} OOM episodes froze the entire host --- not just the notebook kernel, but the desktop session, SSH, everything. A crashed kernel is recoverable; a frozen 64\,GB machine requires a hard power cycle and loses any unsaved state in other applications.
 
-The defense-in-depth solution: run every Jupyter kernel inside a Linux cgroup v2 memory scope. If the kernel exceeds its allocation, the kernel dies. North keeps running.
+The defense-in-depth solution: run every Jupyter kernel inside a Linux cgroup v2 memory scope. If the kernel exceeds its allocation, the kernel dies. The host keeps running.
 
 The implementation lives in three files under \texttt{replication/scripts/}:
 
@@ -63,7 +63,7 @@ Why \texttt{systemd-run --user --scope} rather than, say, \texttt{ulimit}? Becau
 
 Anna runs notebooks in VS Code, not in a browser-based JupyterLab session. VS Code's notebook interface connects to the same Jupyter kernel server but embeds it in the editor alongside the terminal, the file tree, and the git integration. The capped kernel works identically in both environments --- it is a kernel spec, not a JupyterLab extension.
 
-The workflow: open a \texttt{.ipynb} file in VS Code, click the kernel picker in the top-right corner, select ``Python 3 (ph-project, capped)'', and run cells. If a cell triggers the OOM killer, VS Code reports the kernel as dead and offers to restart it. North stays responsive.
+The workflow: open a \texttt{.ipynb} file in VS Code, click the kernel picker in the top-right corner, select ``Python 3 (ph-project, capped)'', and run cells. If a cell triggers the OOM killer, VS Code reports the kernel as dead and offers to restart it. The host stays responsive.
 
 \section{Issue tracking with bd}
 
@@ -96,4 +96,4 @@ Branches follow a convention: \texttt{feature/replication-4zo} for the replicati
 
 \section{Putting it together}
 
-None of this is glamorous. A cgroup wrapper is not a research contribution. A pinned git commit is not a finding. But the alternative is a project that works on one machine, in one session, and breaks the moment someone (or some future version of ourselves) tries to reproduce it. The tooling chapter exists so that ``it ran on north in April 2026'' can become ``here is how to make it run again.''
+None of this is glamorous. A cgroup wrapper is not a research contribution. A pinned git commit is not a finding. But the alternative is a project that works on one machine, in one session, and breaks the moment someone (or some future version of ourselves) tries to reproduce it. The tooling chapter exists so that ``it ran on one workstation in April 2026'' can become ``here is how to make it run again.''

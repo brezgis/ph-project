@@ -86,20 +86,27 @@ everything under `data/` is regenerable from the scripts and notebooks below.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
+python -m spacy download en_core_web_md
+python -m spacy download es_core_news_md
 pytest tests/
 ```
 
+Note: `ripserplusplus` builds from source and needs `nvcc` plus a CUDA toolkit matching
+torch's CUDA major version — see the comments in `requirements.txt`.
+
 Pipeline order:
 
-1. `scripts/download_leipzig.sh`, `scripts/download_fasttext.sh` — corpora and vectors
-2. `scripts/extract_kwic.py` — KWIC extraction (validate with
-   `notebooks/phase1_kwic_validation.ipynb`)
+1. `bash scripts/download_leipzig.sh && bash scripts/download_fasttext.sh` — corpora and
+   vectors (checksummed; no arguments needed)
+2. `python scripts/extract_kwic.py --lang en --domain color` (repeat for `--lang ru` and
+   `--lang es`) — KWIC extraction; validate with `notebooks/phase1_kwic_validation.ipynb`
 3. `notebooks/baseline_*.ipynb` — fastText baselines
 4. `notebooks/mbert_attention_thresholds.ipynb`, `notebooks/mbert_attention_ripser.ipynb` —
    attention extraction and topological features (GPU; several hours)
-5. `scripts/compute_diagram_distances.py` — pairwise persistence-diagram distances
-   (~17 h overnight on 24 cores), then `notebooks/phase3_diagram_distances.ipynb` and
-   `notebooks/phase3_comparison.ipynb` for the statistics
+5. `python scripts/compute_diagram_distances.py` — pairwise persistence-diagram distances
+   (~17 h overnight on 24 cores; `--smoke` runs a seconds-long sanity check first), then
+   `notebooks/phase3_diagram_distances.ipynb` and `notebooks/phase3_comparison.ipynb` for
+   the statistics
 6. `draganov_replication/notebooks/draganov_color_per_term.ipynb` — the embedding-cloud track
 
 Hardware used: one RTX 5070 Ti (16 GB), 64 GB RAM.
@@ -117,7 +124,7 @@ caveat (see `canon-terms/ru/color.yaml`).
 
 - Kushnareva et al. (2021). *Artificial Text Detection via Examining the Topology of Attention
   Maps.* EMNLP. — original code preserved under `reference/`, see
-  `reference/KUSHNAREVA_README.md` for license and provenance
+  `reference/KUSHNAREVA_README.md` (the upstream README) for provenance
 - Berlin & Kay (1969). *Basic Color Terms: Their Universality and Evolution.*
 - Winawer et al. (2007). *Russian blues reveal effects of language on color discrimination.* PNAS.
 - Paramei (2005). *Singing the Russian blues.* Cross-Cultural Research.
@@ -130,3 +137,9 @@ caveat (see `canon-terms/ru/color.yaml`).
 Code was developed with Claude Code (Claude Opus 4.7) inside a task-decomposed,
 human-in-the-loop workflow; all generated code was reviewed through GitHub pull requests
 before merging. See the paper's AI Use Statement for details.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The vendored Kushnareva et al. (2021) code under
+`reference/` is third-party work and is not covered by this repository's MIT license;
+see `reference/KUSHNAREVA_README.md`.

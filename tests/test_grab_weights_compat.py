@@ -176,8 +176,8 @@ def test_snapshot_element(attn):
     catch axis-ordering bugs — e.g. a batch/head transposition would produce
     a different value here than at arr[0,0,0,0,0].
 
-    Baseline recorded with PH_RUN_GRAB_WEIGHTS=1 on north
-    (RTX 5070 Ti, transformers 5.5.3, torch 2.11,
+    Baseline recorded with PH_RUN_GRAB_WEIGHTS=1 on the development
+    workstation (RTX 5070 Ti, transformers 5.5.3, torch 2.11,
     mBERT bert-base-multilingual-cased).
 
     float16 + GPU non-determinism can shift values by ~1e-3; model.eval()
@@ -200,8 +200,8 @@ def test_snapshot_first_row(attn):
     batch/head/query/key transposition would change multiple positions
     simultaneously, making it easy to spot.
 
-    Baseline recorded with PH_RUN_GRAB_WEIGHTS=1 on north
-    (RTX 5070 Ti, transformers 5.5.3, torch 2.11,
+    Baseline recorded with PH_RUN_GRAB_WEIGHTS=1 on the development
+    workstation (RTX 5070 Ti, transformers 5.5.3, torch 2.11,
     mBERT bert-base-multilingual-cased).
     """
     # arr[0, 0, 0, 0, :] — layer=0, sample=0, head=0, query_row=0, all key cols

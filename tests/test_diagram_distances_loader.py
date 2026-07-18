@@ -28,13 +28,13 @@ BARCODE_DIR = REPO_ROOT / "data" / "phase3" / "barcodes"
 
 # KWIC CSVs live under data/kwic/<lang>/<domain>.csv.
 # In worktrees, data/phase3 is symlinked from the main checkout but data/kwic
-# may not be. Fall back to the main checkout location if needed.
+# may not be. Set PH_KWIC_DIR to the main checkout's data/kwic if needed.
 _WORKTREE_KWIC = REPO_ROOT / "data" / "kwic"
-_MAIN_KWIC = pathlib.Path("/home/anna/ph-project/data/kwic")
+_ENV_KWIC = os.environ.get("PH_KWIC_DIR")
 if (_WORKTREE_KWIC / "en" / "color.csv").exists():
     KWIC_DIR = _WORKTREE_KWIC
-elif (_MAIN_KWIC / "en" / "color.csv").exists():
-    KWIC_DIR = _MAIN_KWIC
+elif _ENV_KWIC and (pathlib.Path(_ENV_KWIC) / "en" / "color.csv").exists():
+    KWIC_DIR = pathlib.Path(_ENV_KWIC)
 else:
     KWIC_DIR = _WORKTREE_KWIC  # will trigger skip when not found
 
