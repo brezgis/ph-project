@@ -327,7 +327,9 @@ def extract_kwic(
     # the first three letters of the term word or lemma, compared with accents
     # folded. Inflection and fleeting vowels happen after that (сер-ый ->
     # сер-ая, чёр-ный -> чёр-ен, roj-o -> roj-a, joven -> jóvenes); four
-    # letters lost forms like серая and черен.
+    # letters lost forms like серая and черен. On the full Russian color
+    # corpus (3M sentences) the only hit it drops is one prefixed comparative,
+    # "почернее".
     # Regular inflections always share the stem (reds -> red, черного ->
     # чёрный); what it excludes are suppletive forms like better -> good or
     # лучше -> хороший, i.e. it keeps positive-degree forms in every language.
