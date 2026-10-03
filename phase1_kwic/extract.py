@@ -345,15 +345,15 @@ def extract_kwic(
         term_hits = hits[term_idx]
         n_raw = n_corpus_hits[term_idx]
 
-        # Dedup on kwic_str (preserve first occurrence to keep stable order).
-        # Each hit is (kwic_str, target_idx, corpus_source_id); dedup on
-        # kwic_str alone — cross-year duplicate sentences for the same term
-        # are collapsed here automatically.
-        seen_kwic: set[str] = set()
+        # Dedup on (kwic_str, target_idx), keeping the first occurrence for a
+        # stable order. This collapses the same sentence appearing in two
+        # corpus years, but keeps a second occurrence of the term in one short
+        # sentence (where both windows span the whole sentence and so match).
+        seen_kwic: set[tuple[str, int]] = set()
         deduped: list[tuple[str, int, str]] = []
         for kwic_str, tidx, hit_corpus_id in term_hits:
-            if kwic_str not in seen_kwic:
-                seen_kwic.add(kwic_str)
+            if (kwic_str, tidx) not in seen_kwic:
+                seen_kwic.add((kwic_str, tidx))
                 deduped.append((kwic_str, tidx, hit_corpus_id))
 
         n_after_dedup = len(deduped)

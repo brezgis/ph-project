@@ -1264,3 +1264,25 @@ class TestMultiCorpusAPI:
         red_info = next(t for t in report["terms"] if t["term"] == "red")
         assert red_info["n_corpus_hits"] == 2   # seen twice (once per corpus)
         assert red_info["n_kept_after_dedup"] == 1  # deduplicated to 1
+
+
+
+def test_dedup_keeps_second_occurrence_in_short_sentence(tmp_path):
+    """Two occurrences of a term in one short sentence give identical KWIC
+    windows; both must survive dedup. The same sentence in two corpus years
+    must still collapse to one set of hits."""
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    sentence = "красный а б в г красный д е ж з и"  # 11 tokens: both ±10 windows = whole sentence
+    paths = []
+    for year in (2019, 2020):
+        p = tmp_path / f"rus_news_{year}_1M-sentences.txt"
+        p.write_text(f"1\t{sentence}\n", encoding="utf-8")
+        paths.append(p)
+    df, _ = extract_kwic(
+        "ru", "color", paths, ["rus_news_2019_1M", "rus_news_2020_1M"],
+        n_samples=50, seed=0, min_post_target_tokens=5,
+    )
+    red = df[df["term"] == "красный"]
+    assert sorted(red["target_idx"]) == [0, 5]

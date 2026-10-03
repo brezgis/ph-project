@@ -247,7 +247,7 @@ def test_load_canon_uses_injected_matcher():
     class StubMatcher:
         def lemmatize(self, sentence):
             seen.append(sentence)
-            return [(sentence, "STUB")]
+            return [(sentence, f"STUB:{sentence}")]  # distinct per term (lemma keys must be unique)
 
     terms = load_canon("en", "color", matcher=StubMatcher())
     assert len(terms) == 11
@@ -255,6 +255,21 @@ def test_load_canon_uses_injected_matcher():
     # whitespace token, which became one stubbed lemmatize call.
     assert len(seen) == 11
     for t in terms:
-        assert t.lemmas == ("STUB",), (
-            f"Stub matcher should produce ('STUB',), got {t.lemmas}"
+        assert t.lemmas == (f"STUB:{t.surface}",), (
+            f"Stub matcher should produce ('STUB:{t.surface}',), got {t.lemmas}"
         )
+
+
+def test_compound_and_override_lemmas_are_distinct():
+    """'father-in-law' must not share a key with 'father' (it used to collapse
+    to the first sub-lemma), and lemma overrides must apply."""
+    from phase1_kwic.canon import load_canon
+
+    en = {t.surface: t.lemmas for t in load_canon("en", "kinship")}
+    assert en["father-in-law"] == ("father-in-law",)
+    assert en["father"] == ("father",)
+    es = {t.surface: t.lemmas for t in load_canon("es", "kinship")}
+    assert es["prima"] == ("prima",)
+    assert es["concuñada"] != es["concuñado"]
+    ru = {t.surface: t.lemmas for t in load_canon("ru", "emotion")}
+    assert ru["вина"] == ("вина",)

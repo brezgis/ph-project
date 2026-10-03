@@ -34,10 +34,11 @@ The two matchers use different tokenization strategies, by design:
 
 * **PymorphyMatcher** (Russian) — whitespace split.  The Leipzig Russian
   corpora use Cyrillic script with punctuation largely separated by spaces,
-  so whitespace split is appropriate.  This means ``"мать,"`` would be
-  tokenized as one token ``"мать,"`` and pymorphy3 would still lemmatize it
-  (it strips trailing punctuation internally), but for the KWIC window the
-  whitespace token count is what matters.
+  so whitespace split is appropriate.  ``"мать,"`` stays one whitespace
+  token (the KWIC window counts whitespace tokens), but punctuation is
+  stripped before lemmatizing: pymorphy3 does NOT strip it, and an earlier
+  version that passed ``"мать,"`` straight through never matched any term
+  next to a comma, period, quote or bracket.
 
 * **SpacyMatcher** (English, Spanish) — spaCy's built-in tokenizer, which
   splits punctuation away from words.  So ``"Mother,"`` becomes two tokens:
@@ -69,9 +70,13 @@ from __future__ import annotations
 
 import bisect
 import collections
+import string
 from typing import Iterable, Iterator, Protocol
 
 from baselines.distances import HEAD_POSITION  # imported, NOT redefined
+
+# Stripped from both ends of a whitespace token before pymorphy3 sees it.
+_PUNCT = string.punctuation + "«»„“”‘’‚—–…"
 from phase1_kwic.canon import _pick_lemma  # shared lemma-selection helper
 
 # spaCy model names per language
@@ -188,8 +193,9 @@ class PymorphyMatcher:
         """
         result: list[tuple[str, str]] = []
         for token in sentence.split():
-            parses = self._analyzer.parse(token)
-            lemma = parses[0].normal_form if parses else token.lower()
+            word = token.strip(_PUNCT) or token
+            parses = self._analyzer.parse(word)
+            lemma = parses[0].normal_form if parses else word.lower()
             result.append((token, lemma))
         return result
 

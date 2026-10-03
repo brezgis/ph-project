@@ -96,6 +96,7 @@ terms:
     source: "Greenberg 1966"
     notes: "Gendered cousin split — contrast with English gender-neutral 'cousin.' Same generation collateral."
   - term: prima
+    lemma: prima  # out of context the lemmatizer gives a different word
     gloss: female cousin
     source: "Greenberg 1966"
     notes: "Gendered cousin split."
@@ -140,6 +141,7 @@ terms:
     source: "Real Academia Española 2014"
     notes: "No English single-word equivalent. Sometimes shortened to concuño in Latin America."
   - term: concuñada
+    lemma: concuñada  # out of context the lemmatizer gives a different word
     gloss: female spouse of spouse's sibling
     source: "Real Academia Española 2014"
     notes: "Feminine form of concuñado."

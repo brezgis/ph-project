@@ -75,6 +75,7 @@ terms:
     source: "Wierzbicka 1999"
     notes: "Maps to English shame; included for cross-linguistic comparability."
   - term: вина
+    lemma: вина  # out of context pymorphy reads "вино" (wine); the nominative stays ambiguous in text
     gloss: "guilt"
     source: "Wierzbicka 1999"
     notes: "Maps to English guilt."

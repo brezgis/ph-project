@@ -25,6 +25,8 @@ terms:
     gloss: "<English gloss>"            # optional for en, required for ru/es
     source: "Author Year"               # which cited source licenses this term
     notes: "optional — any caveat, register, or morphological note"
+    lemma: "<lemma>"                    # optional override, when the lemmatizer gets the bare
+                                        # term wrong (e.g. es "prima" -> "primar"); one per word
 deviations:
   - item: "<what was changed>"
     from: "<what the source said>"

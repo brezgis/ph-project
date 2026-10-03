@@ -78,6 +78,7 @@ terms:
     source: "Wierzbicka 1999"
     notes: "Compare cariño; amor is more intense/romantic while cariño is warmer/more everyday."
   - term: culpa
+    lemma: culpa  # out of context the lemmatizer gives a different word
     gloss: "guilt"
     source: "Ekman 1992"
   - term: orgullo
@@ -98,6 +99,7 @@ terms:
     source: "Wierzbicka 1999"
     notes: "Overlaps with añoranza but lacks the specificity of homesickness. Both included for topology structure."
   - term: angustia
+    lemma: angustia  # out of context the lemmatizer gives a different word
     gloss: "anguish, existential anxiety"
     source: "Wierzbicka 1999"
     notes: "Parallels Russian тревога; more visceral than English 'anxiety'."

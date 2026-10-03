@@ -65,13 +65,19 @@ def kmeans_silhouette_sweep(X: np.ndarray, k_range: range) -> dict:
 
     Notes
     -----
+    Vectors are L2-normalized before clustering (spherical k-means).
     ``random_state=0`` is fixed for reproducibility.  ``n_init=10`` is used
     unconditionally (safe for sklearn 1.x and 2.x; avoids the ``"warn"``
     default in sklearn 1.3 that would emit a FutureWarning).
     """
+    # Cluster the L2-normalized vectors (spherical k-means), so the clustering
+    # optimizes the same cosine geometry the silhouette score, the linkage and
+    # the PH baselines use. On raw vectors k-means is Euclidean, and fastText
+    # norms vary with word frequency.
+    Xn = X / np.linalg.norm(X, axis=1, keepdims=True)
     scores: dict = {}
     for k in k_range:
         km = KMeans(n_clusters=k, n_init=10, random_state=0)
-        labels = km.fit_predict(X)
-        scores[k] = silhouette_score(X, labels, metric="cosine")
+        labels = km.fit_predict(Xn)
+        scores[k] = silhouette_score(Xn, labels, metric="cosine")
     return scores
