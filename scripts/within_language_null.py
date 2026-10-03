@@ -56,6 +56,8 @@ def cross_lang_same_term_distance(
     Mirrors the structure of attention_topology.diagram_distances.per_term_test_statistic
     but returns one number per triple (keyed by english term + russian term).
     """
+    if ru_blue_choice not in ("синий", "голубой"):
+        raise ValueError(f"ru_blue_choice must be 'синий' or 'голубой', got {ru_blue_choice!r}")
     blue_rows = triples_df[triples_df["en_term"] == "blue"]
     has_multiple_blues = len(blue_rows) > 1
 

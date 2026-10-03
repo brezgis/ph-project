@@ -116,8 +116,15 @@ def _matcher_versions() -> dict[str, str]:
     try:
         import spacy
         for lang, model in _SPACY_MODEL.items():
-            versions[lang] = f"spacy:{model}"
-    except (AttributeError, ImportError):
+            try:
+                model_version = spacy.util.get_package_version(model)
+            except Exception:
+                model_version = None
+            versions[lang] = (
+                f"spacy=={spacy.__version__}:{model}=={model_version}"
+                if model_version else f"spacy=={spacy.__version__}:{model}"
+            )
+    except ImportError:
         for lang, model in _SPACY_MODEL.items():
             versions[lang] = f"spacy:{model}"
     return versions

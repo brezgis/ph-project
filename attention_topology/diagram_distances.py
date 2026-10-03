@@ -1285,6 +1285,8 @@ def per_term_test_statistic(
     cross_lang = li != lj
 
     # Pre-filter blue rows once to avoid re-filtering inside the loop.
+    if ru_blue_choice not in ("синий", "голубой"):
+        raise ValueError(f"ru_blue_choice must be 'синий' or 'голубой', got {ru_blue_choice!r}")
     blue_rows = triples_df[triples_df["en_term"] == "blue"]
     has_multiple_blues = len(blue_rows) > 1
 

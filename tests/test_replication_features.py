@@ -44,11 +44,13 @@ SUBSETS = ["train", "valid", "test"]
 
 
 def _find_features_file(subset: str) -> str | None:
-    """Return path to the features .npy for `subset`, or None if absent."""
+    """Return path to the threshold-features .npy for `subset`, or None if absent."""
     if not os.path.isdir(FEATURES_DIR):
         return None
     for fname in os.listdir(FEATURES_DIR):
-        if fname.startswith(subset + "_all_heads") and fname.endswith(".npy"):
+        # The ripser and template feature files share the "<subset>_all_heads"
+        # prefix; the threshold features are the ones with "_thrs_" in the name.
+        if fname.startswith(subset + "_all_heads") and "_thrs_" in fname and fname.endswith(".npy"):
             return os.path.join(FEATURES_DIR, fname)
     return None
 

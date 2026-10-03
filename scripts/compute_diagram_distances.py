@@ -36,6 +36,7 @@ On 24 cores this is optimal.  If memory pressure is a concern, reduce n_jobs
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import pathlib
 import sys
@@ -169,6 +170,38 @@ def _load_combined_barcodes(
     return all_diagrams, sample_indices, combined_metadata
 
 
+def _check_cache_matches(
+    path: pathlib.Path, shape: tuple, dims: tuple, metadata: pd.DataFrame
+) -> None:
+    """Refuse to reuse a cached tensor computed for different settings.
+
+    Reads only the npz header, homology dims and sample metadata, not the
+    (multi-GB) tensor itself.
+    """
+    import zipfile
+
+    with zipfile.ZipFile(path) as zf:
+        with zf.open("tensor.npy") as f:
+            version = np.lib.format.read_magic(f)
+            cached_shape = np.lib.format._read_array_header(f, version)[0]
+    with np.load(path) as npz:
+        cached_dims = tuple(int(d) for d in npz["homology_dimensions"])
+        cached_meta = bytes(npz["metadata_json"]).decode("utf-8")
+    problems = []
+    if tuple(cached_shape) != tuple(shape):
+        problems.append(f"shape {tuple(cached_shape)} != expected {tuple(shape)}")
+    if cached_dims != tuple(dims):
+        problems.append(f"homology dims {cached_dims} != requested {tuple(dims)}")
+    if json.loads(cached_meta) != json.loads(metadata.to_json(orient="records")):
+        problems.append("sampled sentences differ (different --seed, --n-per-term or barcodes?)")
+    if problems:
+        raise SystemExit(
+            f"Cache at {path} was computed with different settings: "
+            + "; ".join(problems)
+            + ". Re-run with --force to recompute, or use another --cache-dir."
+        )
+
+
 def _compute_and_cache(
     all_diagrams: dict,
     sample_indices: np.ndarray,
@@ -184,14 +217,18 @@ def _compute_and_cache(
     """Compute and cache one metric tensor."""
     path = cache_path(cache_dir, metric)
 
-    if path.exists() and not force:
-        logger.info("Skipping %s — cache exists at %s (use --force to recompute)", metric, path)
-        return
-
     n = len(sample_indices)
     n_l = len(list(layers))
     n_h = len(list(heads))
     n_d = len(dims)
+
+    if path.exists() and not force:
+        _check_cache_matches(
+            path, (n_l, n_h, n, n, n_d), dims,
+            combined_metadata.iloc[sample_indices].reset_index(drop=True),
+        )
+        logger.info("Skipping %s — cache exists at %s (use --force to recompute)", metric, path)
+        return
     size_mb = n_l * n_h * n * n * n_d * 4 / 1e6
     logger.info(
         "Computing %s tensor: shape (%d, %d, %d, %d, %d) ≈ %.0f MB ...",
@@ -303,6 +340,9 @@ def main(argv: list[str] | None = None) -> None:
         logger.info("Smoke mode active — overriding to n_per_term=5, layer=0/head=0, metric=wasserstein.")
         args.n_per_term = 5
         args.metrics = "wasserstein"
+        # Keep smoke output away from the real cache, which a later full run
+        # would otherwise find and skip over.
+        args.cache_dir = args.cache_dir / "smoke"
         layers_range = range(1)
         heads_range = range(1)
     else:
