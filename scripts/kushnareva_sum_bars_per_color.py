@@ -20,7 +20,7 @@ RIPSER_DIR = Path("results/phase3_ripser")
 KWIC_DIR = Path("data/kwic")
 OUT_BASE = Path("results/figures/kushnareva_sum_bars_per_color")
 
-RIPSER_FILE = ("{lang}_color_all_heads_12_layers_MAX_LEN_32_"
+RIPSER_FILE = ("{lang}_color_all_heads_12_layers_MAX_LEN_64_"
                "bert-base-multilingual-cased_ripser.npy")
 
 FEATURE_NAMES = [

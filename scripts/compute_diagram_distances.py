@@ -39,6 +39,7 @@ import argparse
 import json
 import logging
 import pathlib
+import re
 import sys
 import time
 
@@ -77,25 +78,25 @@ logger = logging.getLogger("compute_diagram_distances")
 LANGS = ["en", "ru", "es"]
 DOMAIN = "color"
 MODEL_TAG = "bert-base-multilingual-cased"
-MAX_LEN = 32
+MAX_LEN = 64  # must match max_tokens_amount in the attention notebooks
 N_LAYERS = 12
 
-# Expected sentinel files — one per language (part3 is the last part).
-# Script aborts if any are missing (full ripser run not yet complete).
-_SENTINEL_GLOB = "{lang}_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilingual-cased_part3of3.json"
+# Barcode files are written in parts: <prefix>_part<k>of<K>.json.
+_BARCODE_PREFIX = f"{{lang}}_color_all_heads_12_layers_MAX_LEN_{MAX_LEN}_{MODEL_TAG}"
 
 
 def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
-    """Assert that the 3 expected barcode sentinel files exist (one per lang).
+    """Assert that every language's barcode parts are all present (part K of K).
 
     Aborts with a clear error message if the full ripser run is incomplete.
     """
     missing = []
     for lang in LANGS:
-        sentinel_name = _SENTINEL_GLOB.format(lang=lang)
-        sentinel_path = barcode_dir / sentinel_name
-        if not sentinel_path.exists():
-            missing.append(str(sentinel_path))
+        prefix = _BARCODE_PREFIX.format(lang=lang)
+        parts = sorted(barcode_dir.glob(prefix + "_part*of*.json"))
+        totals = {int(m.group(1)) for p in parts if (m := re.search(r"of(\d+)\.json$", p.name))}
+        if len(totals) != 1 or len(parts) != next(iter(totals)):
+            missing.append(f"{barcode_dir / prefix}_part*of*.json (found {len(parts)} part file(s))")
 
     if missing:
         logger.error(
@@ -106,7 +107,7 @@ def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
         )
         sys.exit(1)
 
-    logger.info("Pre-flight check passed — all 3 sentinel files present.")
+    logger.info("Pre-flight check passed — all barcode parts present for %s.", ", ".join(LANGS))
 
 
 def _load_combined_barcodes(
@@ -366,11 +367,10 @@ def main(argv: list[str] | None = None) -> None:
     else:
         logger.info("Smoke mode: skipping sentinel file check (may be partial data).")
         # Verify at least en part1 exists for smoke
-        en_part1 = args.barcode_dir / (
-            "en_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilingual-cased_part1of3.json"
-        )
-        if not en_part1.exists():
-            logger.error("Smoke mode requires at least en_color_part1of3.json. Not found: %s", en_part1)
+        en_parts = sorted(args.barcode_dir.glob(_BARCODE_PREFIX.format(lang="en") + "_part1of*.json"))
+        en_part1 = en_parts[0] if en_parts else args.barcode_dir / (_BARCODE_PREFIX.format(lang="en") + "_part1of*.json")
+        if not en_parts:
+            logger.error("Smoke mode requires at least the en part1 barcode file. Not found: %s", en_part1)
             sys.exit(1)
 
     # Load + subsample

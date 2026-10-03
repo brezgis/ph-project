@@ -161,7 +161,7 @@ def load_lang_barcodes(
     lang: str,
     domain: str,
     model_tag: str = "bert-base-multilingual-cased",
-    max_len: int = 32,
+    max_len: int = 64,
     n_layers: int = 12,
     kwic_dir: Optional[str] = None,
 ) -> tuple:

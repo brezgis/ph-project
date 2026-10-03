@@ -19,14 +19,14 @@ env/
 *.ipynb_checkpoints
 
 # Data — too large or sensitive to commit
-data/corpora/
+data/corpora
 # data/kwic/: track SCHEMA.md, ignore the generated CSVs and JSON sidecars
 data/kwic/**/*.csv
 data/kwic/**/*.json
-data/attention/
-data/fasttext/
-data/leipzig/
-data/phase3/
+data/attention
+data/fasttext
+data/leipzig
+data/phase3
 *.npz
 *.npy
 *.pt

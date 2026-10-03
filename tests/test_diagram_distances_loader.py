@@ -718,11 +718,12 @@ class TestToGiottoFormat:
 # Smoke tests against real partial data (gated by PH_REQUIRE_DIAGRAM_DISTANCES)
 # ---------------------------------------------------------------------------
 
-EN_PART1 = BARCODE_DIR / "en_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilingual-cased_part1of3.json"
+_EN_PART1 = sorted(BARCODE_DIR.glob("en_color_all_heads_12_layers_MAX_LEN_*_bert-base-multilingual-cased_part1of*.json"))
+EN_PART1 = _EN_PART1[0] if _EN_PART1 else BARCODE_DIR / "en_color_part1 (not found)"
 
 
 def test_smoke_load_barcode_json_real_part1():
-    """load_barcode_json parses en_color_part1of3.json without crashing."""
+    """load_barcode_json parses the real en part1 barcode file without crashing."""
     _require_import()
     if not EN_PART1.exists():
         _skip_or_fail(f"Barcode file not found: {EN_PART1}")
@@ -767,7 +768,7 @@ def test_smoke_load_lang_barcodes_partial():
         lang="en",
         domain="color",
         model_tag="bert-base-multilingual-cased",
-        max_len=32,
+        max_len=64,
         n_layers=12,
         kwic_dir=str(KWIC_DIR),
     )
@@ -803,7 +804,7 @@ def test_smoke_subsample_en_color():
         lang="en",
         domain="color",
         model_tag="bert-base-multilingual-cased",
-        max_len=32,
+        max_len=64,
         n_layers=12,
         kwic_dir=str(KWIC_DIR),
     )
@@ -830,7 +831,7 @@ def test_smoke_to_giotto_format_layer0_head0():
         lang="en",
         domain="color",
         model_tag="bert-base-multilingual-cased",
-        max_len=32,
+        max_len=64,
         n_layers=12,
         kwic_dir=str(KWIC_DIR),
     )
