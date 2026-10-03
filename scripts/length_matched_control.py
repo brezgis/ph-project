@@ -12,7 +12,7 @@ Uses the cached distance tensor from compute_diagram_distances.py. Token
 counts come from the KWIC sentences, tokenized exactly as the attention
 notebooks do (special tokens included, truncated at MAX_LEN).
 
-Writes results/phase3_diagram_distances/length_matched_control.csv (one row
+Writes results/phase3_diagram_distances/length_matched_control_<metric>.csv (one row
 per (layer, head) plus a head-averaged 'agg' row, for H_0 and H_1) and
 length_matched_control_lengths.csv (token-count histogram per language,
 before and after matching).
@@ -117,9 +117,9 @@ def main(argv: list[str] | None = None) -> None:
     out = pd.concat(rows, ignore_index=True)
     out.insert(0, "metric", metric)
     out.insert(1, "n_matched", len(idx))
-    out.to_csv(args.out_dir / "length_matched_control.csv", index=False)
+    out.to_csv(args.out_dir / f"length_matched_control_{metric}.csv", index=False)
     hist.to_csv(args.out_dir / "length_matched_control_lengths.csv", index=False)
-    print(f"Wrote {args.out_dir / 'length_matched_control.csv'}")
+    print(f"Wrote {args.out_dir / f'length_matched_control_{metric}.csv'}")
 
 
 if __name__ == "__main__":
