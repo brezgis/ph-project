@@ -1,4 +1,4 @@
-"""Tests for replication/diagram_distances.py — compute functions.
+"""Tests for attention_topology/diagram_distances.py — compute functions.
 
 Covers:
   - compute_per_head_distances: symmetry, zero diagonal, dtype, shape
@@ -29,7 +29,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # Conditional import — tests fail on missing production code in Phase 1
 # ---------------------------------------------------------------------------
 try:
-    from replication.diagram_distances import (
+    from attention_topology.diagram_distances import (
         compute_per_head_distances,
         compute_full_distance_tensor,
         cache_path,
@@ -50,7 +50,7 @@ def _skip_or_fail(reason: str) -> None:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import compute/cache functions from replication.diagram_distances — "
+            "Could not import compute/cache functions from attention_topology.diagram_distances — "
             "module does not yet expose compute_per_head_distances, compute_full_distance_tensor, "
             "cache_path, save_distance_tensor, load_distance_tensor."
         )

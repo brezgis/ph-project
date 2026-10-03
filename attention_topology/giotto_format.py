@@ -1,11 +1,7 @@
-"""Shared helper: persistence diagram → giotto-tda PairwiseDistance format.
+"""Persistence diagram → giotto-tda PairwiseDistance format.
 
-Used by both:
-  - ``replication/diagram_distances.py`` (Kushnareva cross-linguistic pipeline)
-  - ``draganov_replication/pd_distances.py`` (Draganov replication pipeline)
-
-Extracted from ``replication/diagram_distances.py`` (ph-project-inu.5) so the
-padding contract lives in exactly one place. Both callers import from here.
+Used by ``attention_topology/diagram_distances.py``; kept in its own module so
+the padding contract lives in exactly one place.
 """
 from __future__ import annotations
 

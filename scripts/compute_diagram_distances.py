@@ -51,7 +51,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from replication.diagram_distances import (
+from attention_topology.diagram_distances import (
     load_lang_barcodes,
     subsample_per_term,
     compute_full_distance_tensor,

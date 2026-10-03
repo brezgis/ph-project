@@ -1,4 +1,4 @@
-"""Tests for per-term permutation test helpers in replication/diagram_distances.py.
+"""Tests for per-term permutation test helpers in attention_topology/diagram_distances.py.
 
 Covers blr.4 additions:
   - _normalize_gloss: strips "dark "/"light " prefixes; idempotent
@@ -39,7 +39,7 @@ pytestmark_slow = pytest.mark.skipif(
 # Conditional import — tests fail (not skip) on missing production code in Phase 1
 # ---------------------------------------------------------------------------
 try:
-    from replication.diagram_distances import (
+    from attention_topology.diagram_distances import (
         _normalize_gloss,
         load_translation_triples,
         per_term_test_statistic,
@@ -60,7 +60,7 @@ def _skip_or_fail(reason: str) -> None:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import per-term helpers from replication.diagram_distances — "
+            "Could not import per-term helpers from attention_topology.diagram_distances — "
             "_normalize_gloss, load_translation_triples, per_term_test_statistic, "
             "permutation_test_per_term, russian_blue_zoom are not yet defined."
         )

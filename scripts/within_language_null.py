@@ -30,7 +30,7 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from replication.diagram_distances import load_translation_triples  # noqa: E402
+from attention_topology.diagram_distances import load_translation_triples  # noqa: E402
 
 DD_DIR = REPO_ROOT / "data" / "phase3" / "diagram_distances"
 OUT_DIR = REPO_ROOT / "results" / "phase3_diagram_distances"
@@ -53,7 +53,7 @@ def cross_lang_same_term_distance(
 ) -> dict[str, float]:
     """For each translation triple, mean distance over all cross-lang same-triple pairs.
 
-    Mirrors the structure of replication.diagram_distances.per_term_test_statistic
+    Mirrors the structure of attention_topology.diagram_distances.per_term_test_statistic
     but returns one number per triple (keyed by english term + russian term).
     """
     blue_rows = triples_df[triples_df["en_term"] == "blue"]

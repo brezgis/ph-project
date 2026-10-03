@@ -84,7 +84,7 @@ import yaml
 import numpy as np
 import pandas as pd
 
-from replication.giotto_format import to_giotto_format  # noqa: F401 — re-exported for callers
+from attention_topology.giotto_format import to_giotto_format  # noqa: F401 — re-exported for callers
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Tests for replication.grab_weights_compat.grab_attention_weights.
+"""Tests for attention_topology.grab_weights_compat.grab_attention_weights.
 
 These tests load bert-base-multilingual-cased once (via a session-scoped
 fixture) and verify that grab_attention_weights returns an array with the
@@ -10,8 +10,7 @@ these tests are **skipped by default**. Set the env var::
 
     PH_RUN_GRAB_WEIGHTS=1 pytest tests/test_grab_weights_compat.py
 
-to opt in. This mirrors the PH_REQUIRE_FEATURES pattern used in
-tests/test_replication_features.py.
+to opt in.
 
 If the model is not cached under ~/.cache/huggingface and
 PH_RUN_GRAB_WEIGHTS is not set, the tests skip with a clear message.
@@ -24,7 +23,7 @@ import pytest
 RUN_GRAB_WEIGHTS = os.environ.get("PH_RUN_GRAB_WEIGHTS") == "1"
 
 # ---------------------------------------------------------------------------
-# Skip gate — mirror of PH_REQUIRE_FEATURES pattern in test_replication_features.py
+# Skip gate
 # ---------------------------------------------------------------------------
 
 def _check_mbert_cached() -> bool:
@@ -117,7 +116,7 @@ BATCH = len(SENTENCES)  # 3
 
 def _get_attention(mbert):
     """Call grab_attention_weights and return the result array."""
-    from replication.grab_weights_compat import grab_attention_weights
+    from attention_topology.grab_weights_compat import grab_attention_weights
 
     model, tokenizer, device = mbert
     return grab_attention_weights(model, tokenizer, SENTENCES, MAX_LEN, device=device)
@@ -285,7 +284,7 @@ def attn_emb_wids(mbert_with_emb):
     the new function take this fixture instead of calling the function
     individually — avoids redundant forward passes through mBERT.
     """
-    from replication.grab_weights_compat import grab_attention_and_embeddings
+    from attention_topology.grab_weights_compat import grab_attention_and_embeddings
 
     model, tokenizer, device = mbert_with_emb
     return grab_attention_and_embeddings(model, tokenizer, SENTENCES, MAX_LEN, device=device)
@@ -366,7 +365,7 @@ def test_slow_tokenizer_rejected():
     `BertTokenizerLegacy` in transformers.models.bert.tokenization_bert_legacy.
     """
     from transformers.models.bert.tokenization_bert_legacy import BertTokenizerLegacy
-    from replication.grab_weights_compat import grab_attention_and_embeddings
+    from attention_topology.grab_weights_compat import grab_attention_and_embeddings
 
     # BertTokenizerLegacy is the Python-backend slow tokenizer (is_fast=False).
     slow_tok = BertTokenizerLegacy.from_pretrained(

@@ -1,4 +1,4 @@
-"""Tests for replication/giotto_format.py — to_giotto_format helper.
+"""Tests for attention_topology/giotto_format.py — to_giotto_format helper.
 
 Covers the three acceptance criteria from ph-project-inu.5:
   - test_padding_uses_hom_dim: H_1 padding rows must have hom_dim=1, not 0.
@@ -20,7 +20,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 try:
-    from replication.giotto_format import to_giotto_format
+    from attention_topology.giotto_format import to_giotto_format
     _IMPORT_OK = True
 except ImportError:
     _IMPORT_OK = False
@@ -29,7 +29,7 @@ except ImportError:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import replication.giotto_format — module not yet created."
+            "Could not import attention_topology.giotto_format — module not yet created."
         )
 
 

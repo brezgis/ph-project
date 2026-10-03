@@ -1,4 +1,4 @@
-"""Tests for replication/diagram_distances.py — loader, giotto-tda conversion, subsampling.
+"""Tests for attention_topology/diagram_distances.py — loader, giotto-tda conversion, subsampling.
 
 Mirrors the PH_REQUIRE_* gating pattern from test_phase3_comparison_outputs.py.
 Set PH_REQUIRE_DIAGRAM_DISTANCES=1 to flip skips into hard failures for
@@ -41,7 +41,7 @@ else:
 # Inline import — the module doesn't exist yet so these imports will fail during Phase 1,
 # satisfying the "tests fail before production code" gate.
 try:
-    from replication.diagram_distances import (
+    from attention_topology.diagram_distances import (
         load_barcode_json,
         load_lang_barcodes,
         subsample_per_term,
@@ -61,7 +61,7 @@ def _skip_or_fail(reason: str) -> None:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import replication.diagram_distances — module not yet created."
+            "Could not import attention_topology.diagram_distances — module not yet created."
         )
 
 
