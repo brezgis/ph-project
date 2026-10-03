@@ -1332,3 +1332,18 @@ def test_stem_rule_keeps_inflected_forms(tmp_path, lang, domain, sentence, term)
         rows[pf] = df[df["term"] == term]
     assert len(rows[False]) == 1
     assert rows[True].equals(rows[False])
+
+
+def test_stem_rule_keeps_fleeting_vowel_short_forms(tmp_path):
+    """Short-form adjectives with a fleeting vowel (чёрный -> черен) share only
+    the first three letters with the lemma."""
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / "rus_news_2019_1M-sentences.txt"
+    corpus.write_text("1\tэтот кот был черен как ночь и никто его не видел в темноте\n", encoding="utf-8")
+    out = {}
+    for pf in (False, True):
+        df, _ = extract_kwic("ru", "color", [corpus], ["rus_news_2019_1M"], n_samples=50, prefilter=pf)
+        out[pf] = df[df["term"] == "чёрный"]
+    assert len(out[False]) == 1 and out[True].equals(out[False])

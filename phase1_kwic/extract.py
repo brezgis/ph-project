@@ -324,9 +324,10 @@ def extract_kwic(
 
     # Stem rule (prefilter=True, the default): a hit is a word whose lemma
     # matches a term AND whose surface form shares one of the term's stems:
-    # the term word or lemma minus its last two letters, kept to 3-4 letters
-    # (сер-ый -> сер-ая, бел-ый, roj-o -> roj-a, red), compared with accents
-    # folded (joven -> jóvenes, frío -> fría, чёрный -> черного).
+    # the first three letters of the term word or lemma, compared with accents
+    # folded. Inflection and fleeting vowels happen after that (сер-ый ->
+    # сер-ая, чёр-ный -> чёр-ен, roj-o -> roj-a, joven -> jóvenes); four
+    # letters lost forms like серая and черен.
     # Regular inflections always share the stem (reds -> red, черного ->
     # чёрный); what it excludes are suppletive forms like better -> good or
     # лучше -> хороший, i.e. it keeps positive-degree forms in every language.
@@ -349,7 +350,7 @@ def extract_kwic(
 
         def _stem(w: str) -> str:
             w = _norm(w)
-            return w[: min(4, max(3, len(w) - 2))]
+            return w[:3]
 
         _term_stems = [
             tuple({_stem(w) for w in (*t.surface.split(), *t.lemmas) if w}) for t in terms
