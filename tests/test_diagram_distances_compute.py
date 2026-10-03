@@ -507,3 +507,26 @@ def test_integration_tiny_synthetic_run(tmp_path):
     np.testing.assert_array_equal(full_tensor, loaded_tensor)
     assert loaded_metric == "wasserstein"
     assert tuple(loaded_dims) == tuple(dims)
+
+
+def test_head_with_no_h1_bars_keeps_h1_slot_separate():
+    """If no sampled diagram has an H1 bar, the H1 distances must be zero, not a
+    copy of H0 (giotto drops a dim it never sees, and the (N,N,1) result used
+    to broadcast into both slots)."""
+    _require_import()
+    rng = np.random.default_rng(0)
+    diagrams = {(0, 0): [
+        {0: np.sort(rng.random((4, 2)), axis=1), 1: np.empty((0, 2))} for _ in range(5)
+    ]}
+    per_head = compute_per_head_distances(
+        diagrams, list(range(5)), layer=0, head=0, metric="wasserstein", dims=(0, 1), n_jobs=1,
+    )
+    assert per_head.shape == (5, 5, 2)
+    assert per_head[..., 0].max() > 0
+    np.testing.assert_array_equal(per_head[..., 1], 0.0)
+
+    tensor = compute_full_distance_tensor(
+        diagrams, list(range(5)), layers=[0], heads=[0], metric="wasserstein",
+        dims=(0, 1), n_jobs=1, progress=False,
+    )
+    np.testing.assert_array_equal(tensor[0, 0, ..., 1], 0.0)

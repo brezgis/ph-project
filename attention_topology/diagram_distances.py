@@ -529,6 +529,11 @@ def compute_full_distance_tensor(
             layer=layer, head=head, metric=metric, dims=dims, n_jobs=n_jobs,
         )
         elapsed = time.perf_counter() - t0
+        if per_head.shape[-1] != n_dims:
+            raise ValueError(
+                f"layer={layer} head={head}: got distances for {per_head.shape[-1]} "
+                f"homology dims, expected {n_dims} ({dims})"
+            )
         logger.info(
             "compute_full_distance_tensor: layer=%d head=%d metric=%s elapsed=%.2fs",
             layer, head, metric, elapsed,

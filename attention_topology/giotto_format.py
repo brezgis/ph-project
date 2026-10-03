@@ -83,7 +83,10 @@ def to_giotto_format(
         for sample in selected:
             arr = sample.get(dim, np.empty((0, 2), dtype=np.float64))
             max_f = max(max_f, len(arr))
-        max_features_per_dim[dim] = max_f
+        # At least one (diagonal) padding row per dim: if no sample has a bar in
+        # this dim, giotto would otherwise not see the dim at all and return
+        # distances for fewer dims than requested.
+        max_features_per_dim[dim] = max(max_f, 1)
 
     total_features = sum(max_features_per_dim[d] for d in dims)
 
