@@ -1,11 +1,11 @@
-"""Tests for the length-matching used by scripts/length_matched_control.py."""
+"""Tests for the length-matching used by scripts/language_effect.py."""
 import sys
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from length_matched_control import length_matched_indices  # noqa: E402
+from language_effect import length_matched_indices  # noqa: E402
 
 
 def test_matched_subset_has_identical_histograms_per_language():

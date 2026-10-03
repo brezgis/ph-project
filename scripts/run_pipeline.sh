@@ -19,38 +19,48 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 LANGS=(en es ru)
+DOMAINS=(color adjective)   # adjective = the control set (Dixon's non-color core adjectives)
 N_JOBS="${N_JOBS:-4}"
 EXEC_DIR=logs/executed
 mkdir -p "$EXEC_DIR"
 
-run_nb() {  # run_nb <notebook path> [lang]; extra env passes through
-    local nb="$1" lang="${2:-}" name
+run_nb() {  # run_nb <notebook path> [lang] [domain]
+    local nb="$1" lang="${2:-}" domain="${3:-color}" name
     name="$(basename "$nb" .ipynb)${lang:+_$lang}"
+    if [ "$domain" != color ]; then name="${name}_$domain"; fi
     echo "=== $(date +%H:%M:%S) $name"
-    PH_LANG="${lang:-ru}" PH_WORKERS="$N_JOBS" uv run jupyter nbconvert --to notebook --execute \
+    PH_LANG="${lang:-ru}" PH_DOMAIN="$domain" PH_WORKERS="$N_JOBS" uv run jupyter nbconvert --to notebook --execute \
         --ExecutePreprocessor.timeout=-1 --ExecutePreprocessor.kernel_name=python3 \
         --output-dir "$EXEC_DIR" --output "$name" "$nb"
 }
 
 stage_kwic() {
-    for lang in "${LANGS[@]}"; do
-        uv run python scripts/extract_kwic.py --lang "$lang" --domain color
+    for domain in "${DOMAINS[@]}"; do
+        for lang in "${LANGS[@]}"; do
+            uv run python scripts/extract_kwic.py --lang "$lang" --domain "$domain"
+        done
     done
     run_nb notebooks/phase1_kwic_validation.ipynb
 }
 
 stage_attention() {
-    for lang in "${LANGS[@]}"; do run_nb notebooks/mbert_attention_thresholds.ipynb "$lang"; done
+    for domain in "${DOMAINS[@]}"; do
+        for lang in "${LANGS[@]}"; do run_nb notebooks/mbert_attention_thresholds.ipynb "$lang" "$domain"; done
+    done
     cp "$EXEC_DIR/mbert_attention_thresholds_ru.ipynb" notebooks/mbert_attention_thresholds.ipynb
 }
 
 stage_ripser() {
-    for lang in "${LANGS[@]}"; do run_nb notebooks/mbert_attention_ripser.ipynb "$lang"; done
+    for domain in "${DOMAINS[@]}"; do
+        for lang in "${LANGS[@]}"; do run_nb notebooks/mbert_attention_ripser.ipynb "$lang" "$domain"; done
+    done
     cp "$EXEC_DIR/mbert_attention_ripser_ru.ipynb" notebooks/mbert_attention_ripser.ipynb
 }
 
 stage_distances() {
-    uv run python scripts/compute_diagram_distances.py --n-jobs "$N_JOBS"
+    for domain in "${DOMAINS[@]}"; do
+        uv run python scripts/compute_diagram_distances.py --domain "$domain" --n-jobs "$N_JOBS"
+    done
 }
 
 stage_stats() {
@@ -63,8 +73,11 @@ stage_stats() {
         done
     done
     uv run python scripts/within_language_null_figure.py
-    uv run python scripts/length_matched_control.py --metric wasserstein
-    uv run python scripts/length_matched_control.py --metric bottleneck
+    for domain in color adjective; do
+        for metric in wasserstein bottleneck; do
+            uv run python scripts/language_effect.py --domain "$domain" --metric "$metric"
+        done
+    done
     uv run python scripts/kushnareva_sum_bars_per_lang.py
     uv run python scripts/kushnareva_sum_bars_per_color.py
 }

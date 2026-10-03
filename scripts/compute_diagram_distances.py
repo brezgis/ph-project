@@ -2,15 +2,15 @@
 
 Computes Wasserstein-2 and bottleneck pairwise distance matrices for every
 (layer, head) ∈ 12×12 across all 3-language color samples and caches the
-results to disk as ``.npz`` files.  This is the overnight CLI job — do NOT
+results to disk as ``.npz`` files.  This is the long CLI job — do NOT
 run inside a notebook.
 
 Usage
 -----
-    # Default overnight run (n_per_term=20, ~17h at n_jobs=-1):
+    # Default run (n_per_term=20, N=680): about an hour per metric at 8 jobs
     python scripts/compute_diagram_distances.py
 
-    # Two-night budget (n_per_term=30, ~38h at n_jobs=-1, N=3000):
+    # Larger sample (n_per_term=30, N=1020): roughly 2.25x the time
     python scripts/compute_diagram_distances.py --n-per-term 30
 
     # Smoke run — verifies pipeline with tiny settings (seconds):
@@ -82,7 +82,8 @@ MAX_LEN = 64  # must match max_tokens_amount in the attention notebooks
 N_LAYERS = 12
 
 # Barcode files are written in parts: <prefix>_part<k>of<K>.json.
-_BARCODE_PREFIX = f"{{lang}}_color_all_heads_12_layers_MAX_LEN_{MAX_LEN}_{MODEL_TAG}"
+def _barcode_prefix(lang: str) -> str:
+    return f"{lang}_{DOMAIN}_all_heads_12_layers_MAX_LEN_{MAX_LEN}_{MODEL_TAG}"
 
 
 def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
@@ -92,7 +93,7 @@ def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
     """
     missing = []
     for lang in LANGS:
-        prefix = _BARCODE_PREFIX.format(lang=lang)
+        prefix = _barcode_prefix(lang)
         parts = sorted(barcode_dir.glob(prefix + "_part*of*.json"))
         totals = {int(m.group(1)) for p in parts if (m := re.search(r"of(\d+)\.json$", p.name))}
         if len(totals) != 1 or len(parts) != next(iter(totals)):
@@ -115,7 +116,7 @@ def _load_combined_barcodes(
     n_per_term: int,
     seed: int,
 ) -> tuple[dict, np.ndarray, pd.DataFrame]:
-    """Load en/ru/es color barcodes, concatenate, and subsample.
+    """Load en/ru/es barcodes for DOMAIN, concatenate, and subsample.
 
     Returns
     -------
@@ -272,8 +273,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cache-dir",
         type=pathlib.Path,
-        default=pathlib.Path("data/phase3/diagram_distances"),
-        help="Directory to write cached distance tensors (default: data/phase3/diagram_distances).",
+        default=None,
+        help="Directory to write cached distance tensors (default: data/phase3/diagram_distances, "
+             "or data/phase3/diagram_distances/<domain> for domains other than color).",
+    )
+    parser.add_argument(
+        "--domain",
+        default="color",
+        help="Term domain to compute distances for: color, or adjective (the control set).",
     )
     parser.add_argument(
         "--n-per-term",
@@ -281,8 +288,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         metavar="N",
         help=(
-            "Samples per (lang, term) to include. Default 20 (~17h overnight at n_jobs=-1). "
-            "For a two-night budget use --n-per-term 30 (~38h, N=3000 total per metric tensor)."
+            "Samples per (lang, term) to include. Default 20 (N=680; about an hour per metric "
+            "at 8 jobs). Time grows with N squared."
         ),
     )
     parser.add_argument(
@@ -326,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Smoke-test mode: n_per_term=5, single (layer=0, head=0), single metric=wasserstein. "
-            "Completes in seconds to verify the pipeline works before launching the full overnight run."
+            "Completes in seconds to verify the pipeline works before launching the full run."
         ),
     )
     return parser
@@ -335,6 +342,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    global DOMAIN
+    DOMAIN = args.domain
+    if args.cache_dir is None:
+        args.cache_dir = pathlib.Path("data/phase3/diagram_distances")
+        if DOMAIN != "color":
+            args.cache_dir = args.cache_dir / DOMAIN
 
     # Apply smoke-mode overrides
     if args.smoke:
@@ -367,8 +381,8 @@ def main(argv: list[str] | None = None) -> None:
     else:
         logger.info("Smoke mode: skipping sentinel file check (may be partial data).")
         # Verify at least en part1 exists for smoke
-        en_parts = sorted(args.barcode_dir.glob(_BARCODE_PREFIX.format(lang="en") + "_part1of*.json"))
-        en_part1 = en_parts[0] if en_parts else args.barcode_dir / (_BARCODE_PREFIX.format(lang="en") + "_part1of*.json")
+        en_parts = sorted(args.barcode_dir.glob(_barcode_prefix("en") + "_part1of*.json"))
+        en_part1 = en_parts[0] if en_parts else args.barcode_dir / (_barcode_prefix("en") + "_part1of*.json")
         if not en_parts:
             logger.error("Smoke mode requires at least the en part1 barcode file. Not found: %s", en_part1)
             sys.exit(1)
@@ -412,7 +426,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.smoke:
         # Pair-distance compute scales ~quadratically in N (samples per layer-head).
-        # Smoke fixes n_per_term=5; the default overnight run uses n_per_term=20,
+        # Smoke fixes n_per_term=5; the default run uses n_per_term=20,
         # adding ~(20/5)**2 = 16x on top of the 144 (layer, head) sweep.
         layer_head_factor = 144
         n_scale_for_default = (20 / 5) ** 2

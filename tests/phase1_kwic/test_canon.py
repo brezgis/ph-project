@@ -179,9 +179,9 @@ def test_supported_languages_is_same_object_as_baselines():
 
 
 def test_domains_frozenset():
-    """DOMAINS must be a frozenset of exactly the three expected domain names."""
+    """DOMAINS must be a frozenset of exactly the expected domain names."""
     assert isinstance(DOMAINS, frozenset)
-    assert DOMAINS == frozenset({"color", "emotion", "kinship"})
+    assert DOMAINS == frozenset({"color", "emotion", "kinship", "adjective"})
 
 
 # ---------------------------------------------------------------------------

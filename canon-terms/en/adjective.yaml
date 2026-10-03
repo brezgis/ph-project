@@ -1,0 +1,52 @@
+domain: adjective
+language: en
+description: >
+  Control set for the color analysis: twelve core adjectives from Dixon's
+  (1977/1982) universal adjective classes DIMENSION, AGE, VALUE and PHYSICAL
+  PROPERTY. Dixon lists COLOR as one of the same core classes, so these are
+  basic, high-frequency adjectives of the same part of speech with clean
+  one-to-one translations, but without color-category structure. Running the
+  identical pipeline on them tests whether a cross-language effect is specific
+  to color.
+sources:
+  - citation: "Dixon, R. M. W. 1982. Where Have All the Adjectives Gone? And Other Essays in Semantics and Syntax. Mouton. Ch. 1 (first published 1977, Studies in Language 1(1):19-80)."
+    role: anchor
+    notes: "Universal core adjective classes (DIMENSION, AGE, VALUE, COLOR, ...); the control terms come from the non-color classes."
+terms:
+  - term: "big"
+    source: "Dixon 1982"
+    notes: "DIMENSION class."
+  - term: "small"
+    source: "Dixon 1982"
+    notes: "DIMENSION class."
+  - term: "long"
+    source: "Dixon 1982"
+    notes: "DIMENSION class."
+  - term: "short"
+    source: "Dixon 1982"
+    notes: "DIMENSION class."
+  - term: "high"
+    source: "Dixon 1982"
+    notes: "DIMENSION class. es alto and ru высокий also cover 'tall'."
+  - term: "old"
+    source: "Dixon 1982"
+    notes: "AGE class."
+  - term: "new"
+    source: "Dixon 1982"
+    notes: "AGE class."
+  - term: "young"
+    source: "Dixon 1982"
+    notes: "AGE class."
+  - term: "good"
+    source: "Dixon 1982"
+    notes: "VALUE class."
+  - term: "bad"
+    source: "Dixon 1982"
+    notes: "VALUE class."
+  - term: "hot"
+    source: "Dixon 1982"
+    notes: "PHYSICAL PROPERTY class. Physical temperature; es caliente and ru горячий are the temperature senses."
+  - term: "cold"
+    source: "Dixon 1982"
+    notes: "PHYSICAL PROPERTY class."
+deviations: []

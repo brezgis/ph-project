@@ -296,6 +296,13 @@ def extract_kwic(
                 if ws_lemmas[term_start: term_start + n_tok] != list(term.lemmas):
                     continue
 
+                # Stem rule (see the prefilter setup below): the surface form must share
+                # the term's stem, which excludes suppletive forms (better -> good).
+                if _term_stems is not None:
+                    head = _norm(ws_tokens[ws_idx]).strip(_PUNCT)
+                    if not head.startswith(_term_stems[term_idx]):
+                        continue
+
                 # Head is at ws_idx — apply min_post_target_tokens filter
                 # (tokens after head = total_tokens - ws_idx - 1)
                 post_target = len(ws_tokens) - ws_idx - 1
@@ -315,26 +322,37 @@ def extract_kwic(
                 # Record the active corpus source ID for per-row provenance
                 hits[term_idx].append((kwic_str, target_idx_in_kwic, _active_corpus_source_id))
 
-    # Optional cheap pre-filter: skip lemmatizing sentences in which no word
-    # even starts like a canon term (the first 4 letters of any term word or
-    # lemma, or 3 for a 4-letter word, since Spanish inflects at the final
-    # vowel: rojo -> roja, rojas). Inflected forms share that stem with the
-    # lemma, so this only drops sentences that can't match (checked against
-    # an unfiltered run: identical output for en and es), and it
-    # makes en/es extraction ~10x faster (spaCy is the bottleneck). Off for
-    # ru by default: pymorphy is fast, and е/ё spelling variants would make
-    # surface prefixes less safe.
+    # Stem rule (prefilter=True, the default): a hit is a word whose lemma
+    # matches a term AND whose surface form shares one of the term's stems
+    # (the first 4 letters of a term word or lemma, 3 for a 4-letter word
+    # since Spanish inflects at the final vowel: rojo -> roja; ё folded to е).
+    # Regular inflections always share the stem (reds -> red, черного ->
+    # чёрный); what it excludes are suppletive forms like better -> good or
+    # лучше -> хороший, i.e. it keeps positive-degree forms in every language.
+    # The same rule also lets us skip lemmatizing sentences in which no word
+    # starts like any term, which makes extraction ~10-20x faster. For the
+    # color terms the output is identical to prefilter=False.
     if prefilter is None:
-        prefilter = lang in ("en", "es")
+        prefilter = True
     if prefilter:
-        _prefixes = sorted({
-            w[: min(4, max(3, len(w) - 1))].lower()
-            for t in terms for w in (*t.surface.split(), *t.lemmas) if w
-        })
-        _could_match = re.compile(
-            r"(?<!\w)(?:" + "|".join(map(re.escape, _prefixes)) + ")", re.IGNORECASE
-        ).search
+        from phase1_kwic.matchers import _PUNCT
+
+        def _norm(w: str) -> str:
+            return w.lower().replace("ё", "е")
+
+        def _stem(w: str) -> str:
+            w = _norm(w)
+            return w[: min(4, max(3, len(w) - 1))]
+
+        _term_stems = [
+            tuple({_stem(w) for w in (*t.surface.split(), *t.lemmas) if w}) for t in terms
+        ]
+        _sentence_regex = re.compile(
+            r"(?<!\w)(?:" + "|".join(sorted(map(re.escape, {x for st in _term_stems for x in st}))) + ")"
+        )
+        _could_match = lambda sentence: _sentence_regex.search(_norm(sentence))  # noqa: E731
     else:
+        _term_stems = None
         _could_match = None
 
     for corpus_path, corpus_source_id in zip(corpus_paths, corpus_source_ids):
