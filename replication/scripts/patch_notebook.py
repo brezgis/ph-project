@@ -69,6 +69,11 @@ for p in (os.path.abspath(os.path.join(_HERE, "..", "..", "vendor", "tda4atd")),
 import networkx as _nx
 if not hasattr(_nx, "from_numpy_matrix"):
     _nx.from_numpy_matrix = _nx.from_numpy_array
+
+# NumPy 1.24 removed np.int; vendor/tda4atd/ripser_count.py still uses it.
+import numpy as _np
+if not hasattr(_np, "int"):
+    _np.int = int
 """
 
 # ---------------------------------------------------------------------------
