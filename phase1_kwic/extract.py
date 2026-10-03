@@ -49,6 +49,8 @@ The emitted target_idx is the head's position in the *windowed* KWIC string.
 """
 from __future__ import annotations
 
+import re
+
 import hashlib
 import pathlib
 import random
@@ -146,6 +148,7 @@ def extract_kwic(
     *,
     _matcher_override: "Matcher | None" = None,
     _terms_override: "list[Term] | None" = None,
+    prefilter: "bool | None" = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Stream one or more Leipzig sentences files, match canon terms, dedup, sample, emit.
 
@@ -312,12 +315,37 @@ def extract_kwic(
                 # Record the active corpus source ID for per-row provenance
                 hits[term_idx].append((kwic_str, target_idx_in_kwic, _active_corpus_source_id))
 
+    # Optional cheap pre-filter: skip lemmatizing sentences in which no word
+    # even starts like a canon term (the first 4 letters of any term word or
+    # lemma, or 3 for a 4-letter word, since Spanish inflects at the final
+    # vowel: rojo -> roja, rojas). Inflected forms share that stem with the
+    # lemma, so this only drops sentences that can't match (checked against
+    # an unfiltered run: identical output for en and es), and it
+    # makes en/es extraction ~10x faster (spaCy is the bottleneck). Off for
+    # ru by default: pymorphy is fast, and е/ё spelling variants would make
+    # surface prefixes less safe.
+    if prefilter is None:
+        prefilter = lang in ("en", "es")
+    if prefilter:
+        _prefixes = sorted({
+            w[: min(4, max(3, len(w) - 1))].lower()
+            for t in terms for w in (*t.surface.split(), *t.lemmas) if w
+        })
+        _could_match = re.compile(
+            r"(?<!\w)(?:" + "|".join(map(re.escape, _prefixes)) + ")", re.IGNORECASE
+        ).search
+    else:
+        _could_match = None
+
     for corpus_path, corpus_source_id in zip(corpus_paths, corpus_source_ids):
         _active_corpus_source_id = corpus_source_id
         with corpus_path.open("r", encoding="utf-8") as fh:
             chunk: list[str] = []
 
             for sentence in _iter_valid_sentences(fh):
+                if _could_match is not None and not _could_match(sentence):
+                    corpus_total_sentences += 1  # still part of the corpus
+                    continue
                 chunk.append(sentence)
                 if len(chunk) >= _LEMMATIZE_CHUNK_SIZE:
                     # Batch-lemmatize the chunk.  lemmatize_many yields one list per

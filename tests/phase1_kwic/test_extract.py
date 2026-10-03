@@ -1286,3 +1286,25 @@ def test_dedup_keeps_second_occurrence_in_short_sentence(tmp_path):
     )
     red = df[df["term"] == "красный"]
     assert sorted(red["target_idx"]) == [0, 5]
+
+
+def test_prefilter_keeps_inflected_forms(tmp_path):
+    """The en/es pre-filter must not drop inflected forms whose 4th letter
+    differs from the lemma (es rojo -> roja/rojas)."""
+    pytest.importorskip("spacy")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / "spa_news_2019_1M-sentences.txt"
+    lines = [
+        "la alfombra roja de uno de los festivales de cine más importantes",
+        "las tejas rojas en los techos no sólo llega al final de la calle",
+        "un texto sin ningún color en absoluto para nada en todo el día",
+    ]
+    corpus.write_text("".join(f"{i}\t{s}\n" for i, s in enumerate(lines)), encoding="utf-8")
+    out = {}
+    for pf in (False, True):
+        df, rep = extract_kwic("es", "color", [corpus], ["spa_news_2019_1M"], n_samples=50, prefilter=pf)
+        out[pf] = (df, rep["corpus_total_sentences"])
+    assert out[True][0].equals(out[False][0])
+    assert out[True][1] == out[False][1] == 3
+    assert (out[True][0]["term"] == "rojo").sum() == 2
