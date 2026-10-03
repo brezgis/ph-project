@@ -1308,3 +1308,27 @@ def test_prefilter_keeps_inflected_forms(tmp_path):
     assert out[True][0].equals(out[False][0])
     assert out[True][1] == out[False][1] == 3
     assert (out[True][0]["term"] == "rojo").sum() == 2
+
+
+@pytest.mark.parametrize("lang,domain,sentence,term", [
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "серый"),
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "белый"),
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "синий"),
+    ("es", "adjective", "los jóvenes del barrio salieron a la calle esta mañana muy temprano", "joven"),
+    ("es", "adjective", "el agua estaba muy fría cuando llegamos a la playa esa tarde de invierno", "frío"),
+])
+def test_stem_rule_keeps_inflected_forms(tmp_path, lang, domain, sentence, term):
+    """The stem rule must keep forms whose 4th letter differs from the lemma's
+    (сер-ый -> сер-ая) and forms that differ only by an accent (jóvenes)."""
+    pytest.importorskip("spacy")
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / f"{lang}_news_2019_1M-sentences.txt"
+    corpus.write_text(f"1\t{sentence}\n", encoding="utf-8")
+    rows = {}
+    for pf in (False, True):
+        df, _ = extract_kwic(lang, domain, [corpus], [f"{lang}_news_2019_1M"], n_samples=50, prefilter=pf)
+        rows[pf] = df[df["term"] == term]
+    assert len(rows[False]) == 1
+    assert rows[True].equals(rows[False])

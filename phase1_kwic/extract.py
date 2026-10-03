@@ -323,9 +323,10 @@ def extract_kwic(
                 hits[term_idx].append((kwic_str, target_idx_in_kwic, _active_corpus_source_id))
 
     # Stem rule (prefilter=True, the default): a hit is a word whose lemma
-    # matches a term AND whose surface form shares one of the term's stems
-    # (the first 4 letters of a term word or lemma, 3 for a 4-letter word
-    # since Spanish inflects at the final vowel: rojo -> roja; ё folded to е).
+    # matches a term AND whose surface form shares one of the term's stems:
+    # the term word or lemma minus its last two letters, kept to 3-4 letters
+    # (сер-ый -> сер-ая, бел-ый, roj-o -> roj-a, red), compared with accents
+    # folded (joven -> jóvenes, frío -> fría, чёрный -> черного).
     # Regular inflections always share the stem (reds -> red, черного ->
     # чёрный); what it excludes are suppletive forms like better -> good or
     # лучше -> хороший, i.e. it keeps positive-degree forms in every language.
@@ -337,12 +338,18 @@ def extract_kwic(
     if prefilter:
         from phase1_kwic.matchers import _PUNCT
 
+        import unicodedata
+
         def _norm(w: str) -> str:
-            return w.lower().replace("ё", "е")
+            # lowercase and strip combining marks (á -> a, ё -> е, й -> и)
+            return "".join(
+                ch for ch in unicodedata.normalize("NFD", w.lower())
+                if not unicodedata.combining(ch)
+            )
 
         def _stem(w: str) -> str:
             w = _norm(w)
-            return w[: min(4, max(3, len(w) - 1))]
+            return w[: min(4, max(3, len(w) - 2))]
 
         _term_stems = [
             tuple({_stem(w) for w in (*t.surface.split(), *t.lemmas) if w}) for t in terms
