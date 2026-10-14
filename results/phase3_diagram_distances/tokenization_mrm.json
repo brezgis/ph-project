@@ -1,0 +1,774 @@
+{
+ "wasserstein color H0 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.14856729876113606,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.002344618028250602,
+    "p_perm": 0.202
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 8.073613409913076e-05,
+    "p_perm": 0.991
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0009021950111059304,
+    "p_perm": 0.654
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.9943713345640276,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.043370509122263756,
+    "p_perm": 0.484
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.021755048382178663,
+    "p_perm": 0.67
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.003989622094601139,
+    "p_perm": 0.855
+   }
+  ]
+ },
+ "wasserstein color H0 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.01783456277716753,
+    "p_perm": 0.004
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0021007532556408235,
+    "p_perm": 0.694
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.022879568073865233,
+    "p_perm": 0.057
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.00014314510375034565,
+    "p_perm": 0.97
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.98751576527803,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.006450183482845019,
+    "p_perm": 0.928
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.004004152234307211,
+    "p_perm": 0.952
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.0025002146624597764,
+    "p_perm": 0.919
+   }
+  ]
+ },
+ "wasserstein color H1 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.09385825854563658,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0006911076707304476,
+    "p_perm": 0.705
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": -0.024887662421303323,
+    "p_perm": 0.034
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0033922235475879314,
+    "p_perm": 0.071
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.6592458559566208,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.49016178151332035,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.5001559907562357,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.10858059720848268,
+    "p_perm": 0.001
+   }
+  ]
+ },
+ "wasserstein color H1 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.07792921366826462,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0027306258886426495,
+    "p_perm": 0.651
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.07807344643613297,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.004204470667035379,
+    "p_perm": 0.439
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.36555087731871627,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.16472180606553158,
+    "p_perm": 0.211
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.12118655207658399,
+    "p_perm": 0.298
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.018625757366052997,
+    "p_perm": 0.618
+   }
+  ]
+ },
+ "wasserstein adjective H0 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.13404059483282954,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0028369217286953094,
+    "p_perm": 0.042
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.007560330232495119,
+    "p_perm": 0.339
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.000985552076377392,
+    "p_perm": 0.53
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.9954136391541015,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.04157835353738453,
+    "p_perm": 0.474
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.019212677762535102,
+    "p_perm": 0.692
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.0004476851543761952,
+    "p_perm": 0.989
+   }
+  ]
+ },
+ "wasserstein adjective H0 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.014373817101788275,
+    "p_perm": 0.007
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.006101630075462257,
+    "p_perm": 0.144
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.01824063136715198,
+    "p_perm": 0.095
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0017818452451300734,
+    "p_perm": 0.677
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.9880241880349069,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -4.0920320833970266e-05,
+    "p_perm": 0.998
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.007144832687563933,
+    "p_perm": 0.943
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.002000244817603203,
+    "p_perm": 0.933
+   }
+  ]
+ },
+ "wasserstein adjective H1 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.10093714680825058,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.003317965224611105,
+    "p_perm": 0.002
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.021291941890229076,
+    "p_perm": 0.035
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.000360883368785874,
+    "p_perm": 0.75
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.6216322282838873,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.6179763326167372,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.5784052379801101,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.07123253138659275,
+    "p_perm": 0.008
+   }
+  ]
+ },
+ "wasserstein adjective H1 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.0750869015996602,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.011290415967346385,
+    "p_perm": 0.007
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.09561120006269368,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.010708087150484222,
+    "p_perm": 0.008
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.3309503536746903,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.2408190495405798,
+    "p_perm": 0.085
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.24084482014907999,
+    "p_perm": 0.052
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.024362938750804697,
+    "p_perm": 0.511
+   }
+  ]
+ },
+ "interaction wasserstein H0": {
+  "S_color": 0.012882405892014503,
+  "S_adj": 0.010506656020879745,
+  "diff": 0.002375749871134758,
+  "ci": [
+   -0.006539388839155435,
+   0.011322204605676232
+  ]
+ },
+ "interaction wasserstein H1": {
+  "S_color": 0.01509860809892416,
+  "S_adj": 0.013861827552318573,
+  "diff": 0.001236780546605587,
+  "ci": [
+   -0.002280729776248336,
+   0.004575234302319585
+  ]
+ },
+ "bottleneck color H0 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.13045100988516678,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.003024608623130977,
+    "p_perm": 0.135
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.013462593396237704,
+    "p_perm": 0.093
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0020369132912784337,
+    "p_perm": 0.297
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.8936795855742623,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.2777339795490386,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.21402659187124262,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.01690116735358156,
+    "p_perm": 0.312
+   }
+  ]
+ },
+ "bottleneck color H0 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.011391073535790101,
+    "p_perm": 0.024
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0019400871631577057,
+    "p_perm": 0.716
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.012365901018147156,
+    "p_perm": 0.218
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.00030673321548678456,
+    "p_perm": 0.955
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.883762164786757,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.03631514712398846,
+    "p_perm": 0.634
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.040815120124379135,
+    "p_perm": 0.553
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.004369564431251475,
+    "p_perm": 0.851
+   }
+  ]
+ },
+ "bottleneck color H1 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.12174225609499202,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0006328858676289664,
+    "p_perm": 0.737
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.01526673590764919,
+    "p_perm": 0.147
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0016918001445109286,
+    "p_perm": 0.377
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.5252855596088639,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.27615124542609026,
+    "p_perm": 0.002
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.2695260096430247,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.08580252726381209,
+    "p_perm": 0.001
+   }
+  ]
+ },
+ "bottleneck color H1 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.09366159926078933,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0057678211537035015,
+    "p_perm": 0.301
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.06582091405935936,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.00634874364867221,
+    "p_perm": 0.242
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.24364447528531985,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.11980316612778354,
+    "p_perm": 0.316
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.041638133967593284,
+    "p_perm": 0.733
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.009486516254792665,
+    "p_perm": 0.814
+   }
+  ]
+ },
+ "bottleneck adjective H0 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.11665247109612889,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0038445966329929823,
+    "p_perm": 0.025
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.01682740630014822,
+    "p_perm": 0.007
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0030046356890955713,
+    "p_perm": 0.08
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.894433329487755,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.24767917170551665,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.17945747987939756,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": -0.022735306044783053,
+    "p_perm": 0.131
+   }
+  ]
+ },
+ "bottleneck adjective H0 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.009929853373801874,
+    "p_perm": 0.027
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.00274082141491713,
+    "p_perm": 0.518
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.009529793966587582,
+    "p_perm": 0.31
+   },
+   {
+    "term": "same_concept",
+    "beta_std": 0.0013160091649050054,
+    "p_perm": 0.752
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.8884438085949001,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": -0.047279973569275484,
+    "p_perm": 0.571
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": 0.05436479607443592,
+    "p_perm": 0.471
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.0029025211231321706,
+    "p_perm": 0.897
+   }
+  ]
+ },
+ "bottleneck adjective H1 all": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.11585279514451105,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0037094216933283497,
+    "p_perm": 0.003
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.05389953584822875,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.0010367259720632373,
+    "p_perm": 0.467
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.49053122362945545,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.3179119999038911,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.3108895490987749,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.049518927859426354,
+    "p_perm": 0.022
+   }
+  ]
+ },
+ "bottleneck adjective H1 length_matched": {
+  "base": [
+   {
+    "term": "different_language",
+    "beta_std": 0.1025125513133634,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.00908953854721657,
+    "p_perm": 0.026
+   }
+  ],
+  "full": [
+   {
+    "term": "different_language",
+    "beta_std": 0.10745128604183131,
+    "p_perm": 0.001
+   },
+   {
+    "term": "same_concept",
+    "beta_std": -0.007560685586914073,
+    "p_perm": 0.067
+   },
+   {
+    "term": "d_wordpieces",
+    "beta_std": 0.2376654087531965,
+    "p_perm": 0.001
+   },
+   {
+    "term": "d_fertility",
+    "beta_std": 0.04552653211932102,
+    "p_perm": 0.701
+   },
+   {
+    "term": "d_cont_share",
+    "beta_std": -0.05638102139894602,
+    "p_perm": 0.624
+   },
+   {
+    "term": "d_target_pieces",
+    "beta_std": 0.010001597544003486,
+    "p_perm": 0.744
+   }
+  ]
+ },
+ "interaction bottleneck H0": {
+  "S_color": 0.0038444544188678265,
+  "S_adj": 0.003421352244913578,
+  "diff": 0.00042310217395424843,
+  "ci": [
+   -0.004090707338764332,
+   0.00514607262739446
+  ]
+ },
+ "interaction bottleneck H1": {
+  "S_color": 0.012419885955750942,
+  "S_adj": 0.012637816369533539,
+  "diff": -0.0002179304137825966,
+  "ci": [
+   -0.003219988686032593,
+   0.002992775896564124
+  ]
+ }
+}

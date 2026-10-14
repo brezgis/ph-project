@@ -30,6 +30,18 @@ Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. T
     Spanish and Russian for adjectives in general; nothing here is specific to color terms.
     Per head, the length-matched color effect is significant in 85 of 144 heads for H1 and
     41 of 144 for H0 (Benjamini–Hochberg, q = 0.05).
+- **Most of the language effect is tokenization.** mBERT splits Russian much more finely: even
+  on the length-matched subset, Russian has 1.8 wordpieces per word against 1.2–1.3 for
+  English and Spanish, 44% continuation (`##`) pieces against 18–22%, and its color words
+  split into 2.9 pieces against 1.1–1.4. A regression on the distance matrices
+  (`scripts/tokenization_analysis.py`, permutation p-values) that adds pairwise differences
+  in wordpiece count, fertility, continuation share and target-word pieces absorbs the
+  language effect on the full corpus (H0 β 0.15 → 0.00, p = 0.99). One thing survives: on
+  length-matched contexts, loop structure (H1) still differs by language after these
+  controls (β ≈ 0.07–0.11, p = 0.001), for color and adjectives alike. Whatever that is
+  (syntax, word order, or tokenization finer than these summaries), it is not about color:
+  the color-minus-adjective difference in language separation has a 95% bootstrap CI
+  spanning zero for every metric and dimension.
 - **The differences are small next to the noise.** Diagrams of the same color term from two
   different languages are only 2–17% farther apart than two random halves of the same
   language's sample.
