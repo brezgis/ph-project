@@ -15,18 +15,29 @@ Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. T
 
 ## What I found
 
-- **There is a language signal, but it's small.** A permutation test over all attention
-  heads is overwhelmingly significant (z = 56.8, p < 10⁻⁴), and 100 of 144 heads are
-  significant on their own after Benjamini–Hochberg correction. But within- and
-  cross-language distances between persistence diagrams differ by only 1–9%: two diagrams
-  of the same color in the same language are nearly as far apart as two from different
-  languages.
-- **синий and голубой don't separate beyond noise** (within-Russian permutation p ≈ 0.27).
-- **The translation triples are asymmetric.** {blue, azul, синий} is topologically closer
-  than chance (p = 0.008); {blue, azul, голубой} is not (p = 0.68). That fits the evidence
-  that English *blue* lines up with синий.
-- Aggregate feature distances order the languages en–es < ru–es < en–ru.
 
+- **The attention topology differs by language, but not because of color.** A permutation
+  test over all 144 heads is overwhelmingly significant on the full corpus (head-averaged
+  z = 55–80 depending on metric and dimension, p < 10⁻⁴). Two controls shrink that story:
+  - **Sentence length.** Russian contexts run longer, and length alone changes the shape of
+    an attention graph. On a length-matched subset (282 color sentences), the H0 effect
+    (connected components) falls to z = 2.7–4.5; the H1 effect (loops) holds at z ≈ 33–34.
+  - **Non-color adjectives.** The same analysis on Dixon's core non-color adjectives gives
+    the same pattern at the same size (length-matched H0 z = 2.6–4.1, H1 z ≈ 35–36). So
+    mBERT's attention topology differs across English, Spanish and Russian for adjectives in
+    general; nothing here is specific to color terms.
+- **The differences are small next to the noise.** Diagrams of the same color term from two
+  different languages are only 2–17% farther apart than two random halves of the same
+  language's sample.
+- **синий and голубой don't separate.** The within-Russian test finds no difference between
+  the two blues (permutation p = 0.57–0.97 across metrics).
+- **The translation-triple asymmetry is now only a trend.** {blue, azul, синий} is
+  somewhat closer than chance (p = 0.04–0.15 across the four metric/dimension pairs) and
+  {blue, azul, голубой} is not (p = 0.34–0.98). That is the direction you'd expect if
+  English *blue* lines up with синий, but it doesn't survive correction for the four tests.
+- Aggregate feature distances still order the languages en–es < ru–es < en–ru.
+
+These replace the numbers in the original course paper; see [What changed after the course](#what-changed-after-the-course).
 Summary tables and figures are in `results/`.
 
 ## Replicating Kushnareva et al. (2021)
@@ -77,7 +88,7 @@ Then, in order:
 3. `notebooks/baseline_*.ipynb`: the fastText baselines
 4. `notebooks/mbert_attention_thresholds.ipynb`, `notebooks/mbert_attention_ripser.ipynb`:
    attention extraction and topological features (GPU, several hours)
-5. `uv run python scripts/compute_diagram_distances.py` (about 17 hours on 24 cores; `--smoke`
+5. `uv run python scripts/compute_diagram_distances.py` (about 2.5 hours per domain on 16 cores; `--smoke`
    runs a quick check first), then `notebooks/phase3_diagram_distances.ipynb` and
    `notebooks/phase3_comparison.ipynb` for the statistics
 
@@ -94,7 +105,29 @@ with 64 GB of RAM.
 - ru *фиолетовый* reached only 104 sentences (the target was 200) and is kept with a caveat;
   see `canon-terms/ru/color.yaml`.
 
-KNOWN_ISSUES_PLACEHOLDER
+## What changed after the course
+
+I cleaned up and re-ran the whole pipeline in October 2026. The fixes changed some results,
+so the numbers above differ from the course paper.
+
+- **Russian punctuation.** pymorphy3 doesn't strip punctuation, so a Russian term touching
+  a comma, period, quote or bracket was never matched: 0% of Russian target tokens carried
+  punctuation, against 10.5% in English and 28.6% in Spanish, a systematic context
+  difference between the languages. Punctuation is now stripped before parsing.
+- **Compounds and lemmas.** Hyphenated compounds keep all their parts (en/es *red-haired*
+  used to count as *red*, while Russian compounds never matched); terms can carry an explicit
+  lemma override for words the lemmatizer misreads out of context; and a repeated term in a
+  short sentence no longer drops the second occurrence.
+- **Context length.** The 32-token cap truncated 64% of Russian contexts. The cap is now 64
+  tokens.
+- **A length-matched control.** Even at 64 tokens, Russian contexts are longer; the language
+  test now also runs on a subset matched for length.
+- **A non-color control.** The same analysis on Dixon's core non-color adjectives, to check
+  whether any language effect is specific to color.
+- **Russian stemming.** The term-matching stem rule is now the first three letters with
+  accents folded; it drops one form (*почернее*) on the full corpus.
+- **fastText baselines.** k-means now runs on L2-normalized vectors, matching the cosine
+  silhouette and the rest of the analysis; the baselines were re-run.
 
 ## References
 
