@@ -17,15 +17,19 @@ Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. T
 
 
 - **The attention topology differs by language, but not because of color.** A permutation
-  test over all 144 heads is overwhelmingly significant on the full corpus (head-averaged
-  z = 55–80 depending on metric and dimension, p < 10⁻⁴). Two controls shrink that story:
+  test on the head-averaged distance between persistence diagrams is overwhelmingly
+  significant on the full corpus (z = 55–80 depending on metric and dimension, p < 10⁻⁴).
+  Two controls shrink that story:
   - **Sentence length.** Russian contexts run longer, and length alone changes the shape of
     an attention graph. On a length-matched subset (282 color sentences), the H0 effect
-    (connected components) falls to z = 2.7–4.5; the H1 effect (loops) holds at z ≈ 33–34.
-  - **Non-color adjectives.** The same analysis on Dixon's core non-color adjectives gives
-    the same pattern at the same size (length-matched H0 z = 2.6–4.1, H1 z ≈ 35–36). So
-    mBERT's attention topology differs across English, Spanish and Russian for adjectives in
-    general; nothing here is specific to color terms.
+    (connected components) shrinks to z = 2.7–4.5 (still significant, p = 0.003–0.02); the
+    H1 effect (loops) holds at z = 33–34.
+  - **Non-color adjectives.** On Dixon's core non-color adjectives the effect is even larger
+    on the full corpus (z = 72–112), and after length-matching it lands where color does
+    (H0 z = 2.6–4.1, H1 z = 35–36). So mBERT's attention topology differs across English,
+    Spanish and Russian for adjectives in general; nothing here is specific to color terms.
+    Per head, the length-matched color effect is significant in 85 of 144 heads for H1 and
+    41 of 144 for H0 (Benjamini–Hochberg, q = 0.05).
 - **The differences are small next to the noise.** Diagrams of the same color term from two
   different languages are only 2–17% farther apart than two random halves of the same
   language's sample.
@@ -34,11 +38,15 @@ Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. T
 - **The translation-triple asymmetry is now only a trend.** {blue, azul, синий} is
   somewhat closer than chance (p = 0.04–0.15 across the four metric/dimension pairs) and
   {blue, azul, голубой} is not (p = 0.34–0.98). That is the direction you'd expect if
-  English *blue* lines up with синий, but it doesn't survive correction for the four tests.
+  English *blue* lines up with синий, but only one of the four tests is below 0.05
+  (p = 0.044), so it doesn't survive correction.
 - Aggregate feature distances still order the languages en–es < ru–es < en–ru.
 
 These replace the numbers in the original course paper; see [What changed after the course](#what-changed-after-the-course).
-Summary tables and figures are in `results/`.
+Summary tables are in `results/`; the final figures are in `results/figures/final/`
+(regenerate them with `uv run python scripts/make_figures.py`).
+
+![Language effect for color terms and control adjectives, all sentences and length-matched](results/figures/final/fig1_language_effect.png)
 
 ## Replicating Kushnareva et al. (2021)
 

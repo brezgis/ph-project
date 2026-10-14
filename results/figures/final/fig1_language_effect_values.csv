@@ -1,0 +1,17 @@
+metric,domain,dim,subset,n_sentences,z,p_value,passes_bh
+bottleneck,adjective,0,all,720,71.89,9.999e-05,True
+bottleneck,color,0,all,680,66.67,9.999e-05,True
+bottleneck,adjective,0,length_matched,309,2.57,0.0196,True
+bottleneck,color,0,length_matched,282,2.656,0.0164,True
+bottleneck,adjective,1,all,720,97.83,9.999e-05,True
+bottleneck,color,1,all,680,68.28,9.999e-05,True
+bottleneck,adjective,1,length_matched,309,35.75,9.999e-05,True
+bottleneck,color,1,length_matched,282,32.83,9.999e-05,True
+wasserstein,adjective,0,all,720,93.84,9.999e-05,True
+wasserstein,color,0,all,680,79.67,9.999e-05,True
+wasserstein,adjective,0,length_matched,309,4.078,0.0046,True
+wasserstein,color,0,length_matched,282,4.45,0.0034,True
+wasserstein,adjective,1,all,720,112.2,9.999e-05,True
+wasserstein,color,1,all,680,54.55,9.999e-05,True
+wasserstein,adjective,1,length_matched,309,35.26,9.999e-05,True
+wasserstein,color,1,length_matched,282,34.11,9.999e-05,True
