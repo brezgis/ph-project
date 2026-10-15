@@ -14,7 +14,7 @@ A Brandeis COSI 115b (Fundamentals of NLP II) course project. The paper is
 ([PDF](https://brezgis.com/assets/papers/brezgis-topology-of-color.pdf)).
 The feature extraction follows Kushnareva et al. (2021); see below.
 
-## What I found
+## Results
 
 
 - **The attention topology differs by language, but not because of color.** A permutation
