@@ -11,7 +11,7 @@ Ripser feature expected shape: (12, 12, N_kwic, 14)
   - 14 = len(ripser_feature_names) in cell 31 of mbert_attention_ripser.ipynb
   - Axis order follows the substrate: cell 36 concatenates per-batch
     (12, 12, n_batch, 14) arrays along axis=2 (samples), yielding
-    (12, 12, N_kwic, 14). Confirmed by reference/ripser_count.py
+    (12, 12, N_kwic, 14). Confirmed by vendor/tda4atd/ripser_count.py
     count_ripser_features → np.swapaxes(..., 0, 1) returning (samples, features).
   - N_kwic varies per (lang, domain): en/color ~2200, ru/color ~2267, es/color ~2161
 

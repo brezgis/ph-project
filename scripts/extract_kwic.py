@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> None:
             corpus_source_ids = pinned_ids
         else:
             # Custom paths given, no IDs given → derive from filename stems
-            corpus_source_ids = [p.stem for p in corpus_paths]
+            corpus_source_ids = [p.stem.removesuffix("-sentences") for p in corpus_paths]
 
     # Validate equal lengths when both are explicitly supplied
     if args.corpus_path is not None and args.corpus_source_id is not None:

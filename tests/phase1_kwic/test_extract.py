@@ -1264,3 +1264,86 @@ class TestMultiCorpusAPI:
         red_info = next(t for t in report["terms"] if t["term"] == "red")
         assert red_info["n_corpus_hits"] == 2   # seen twice (once per corpus)
         assert red_info["n_kept_after_dedup"] == 1  # deduplicated to 1
+
+
+
+def test_dedup_keeps_second_occurrence_in_short_sentence(tmp_path):
+    """Two occurrences of a term in one short sentence give identical KWIC
+    windows; both must survive dedup. The same sentence in two corpus years
+    must still collapse to one set of hits."""
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    sentence = "красный а б в г красный д е ж з и"  # 11 tokens: both ±10 windows = whole sentence
+    paths = []
+    for year in (2019, 2020):
+        p = tmp_path / f"rus_news_{year}_1M-sentences.txt"
+        p.write_text(f"1\t{sentence}\n", encoding="utf-8")
+        paths.append(p)
+    df, _ = extract_kwic(
+        "ru", "color", paths, ["rus_news_2019_1M", "rus_news_2020_1M"],
+        n_samples=50, seed=0, min_post_target_tokens=5,
+    )
+    red = df[df["term"] == "красный"]
+    assert sorted(red["target_idx"]) == [0, 5]
+
+
+def test_prefilter_keeps_inflected_forms(tmp_path):
+    """The en/es pre-filter must not drop inflected forms whose 4th letter
+    differs from the lemma (es rojo -> roja/rojas)."""
+    pytest.importorskip("spacy")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / "spa_news_2019_1M-sentences.txt"
+    lines = [
+        "la alfombra roja de uno de los festivales de cine más importantes",
+        "las tejas rojas en los techos no sólo llega al final de la calle",
+        "un texto sin ningún color en absoluto para nada en todo el día",
+    ]
+    corpus.write_text("".join(f"{i}\t{s}\n" for i, s in enumerate(lines)), encoding="utf-8")
+    out = {}
+    for pf in (False, True):
+        df, rep = extract_kwic("es", "color", [corpus], ["spa_news_2019_1M"], n_samples=50, prefilter=pf)
+        out[pf] = (df, rep["corpus_total_sentences"])
+    assert out[True][0].equals(out[False][0])
+    assert out[True][1] == out[False][1] == 3
+    assert (out[True][0]["term"] == "rojo").sum() == 2
+
+
+@pytest.mark.parametrize("lang,domain,sentence,term", [
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "серый"),
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "белый"),
+    ("ru", "color", "серая куртка и белая шапка и синяя сумка лежали на столе в прихожей весь вечер", "синий"),
+    ("es", "adjective", "los jóvenes del barrio salieron a la calle esta mañana muy temprano", "joven"),
+    ("es", "adjective", "el agua estaba muy fría cuando llegamos a la playa esa tarde de invierno", "frío"),
+])
+def test_stem_rule_keeps_inflected_forms(tmp_path, lang, domain, sentence, term):
+    """The stem rule must keep forms whose 4th letter differs from the lemma's
+    (сер-ый -> сер-ая) and forms that differ only by an accent (jóvenes)."""
+    pytest.importorskip("spacy")
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / f"{lang}_news_2019_1M-sentences.txt"
+    corpus.write_text(f"1\t{sentence}\n", encoding="utf-8")
+    rows = {}
+    for pf in (False, True):
+        df, _ = extract_kwic(lang, domain, [corpus], [f"{lang}_news_2019_1M"], n_samples=50, prefilter=pf)
+        rows[pf] = df[df["term"] == term]
+    assert len(rows[False]) == 1
+    assert rows[True].equals(rows[False])
+
+
+def test_stem_rule_keeps_fleeting_vowel_short_forms(tmp_path):
+    """Short-form adjectives with a fleeting vowel (чёрный -> черен) share only
+    the first three letters with the lemma."""
+    pytest.importorskip("pymorphy3")
+    from phase1_kwic.extract import extract_kwic
+
+    corpus = tmp_path / "rus_news_2019_1M-sentences.txt"
+    corpus.write_text("1\tэтот кот был черен как ночь и никто его не видел в темноте\n", encoding="utf-8")
+    out = {}
+    for pf in (False, True):
+        df, _ = extract_kwic("ru", "color", [corpus], ["rus_news_2019_1M"], n_samples=50, prefilter=pf)
+        out[pf] = df[df["term"] == "чёрный"]
+    assert len(out[False]) == 1 and out[True].equals(out[False])

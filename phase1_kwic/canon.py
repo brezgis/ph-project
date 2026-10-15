@@ -86,10 +86,14 @@ def _pick_lemma(ws_token: str, pairs: list[tuple[str, str]]) -> str:
     """
     if not pairs:
         return ws_token.lower()
-    return next(
-        (lem for _, lem in pairs if any(ch.isalpha() for ch in lem)),
-        pairs[0][1],
-    )
+    alpha = [lem for _, lem in pairs if any(ch.isalpha() for ch in lem)]
+    # A hyphenated compound ("father-in-law", "red-haired") keeps all its
+    # parts. Taking only the first sub-lemma made "father-in-law" match every
+    # "father", and counted "red-haired" as "red" in en/es while ru compounds
+    # (one pymorphy token) never matched; joining makes all three consistent.
+    if len(alpha) > 1 and "-" in ws_token.strip("-"):
+        return "-".join(alpha)
+    return alpha[0] if alpha else pairs[0][1]
 
 
 def _lemmatize_ws_token(ws_token: str, matcher: "Matcher") -> str:
@@ -244,9 +248,17 @@ def load_canon(
         # are collapsed by taking the first lemma from the result list for
         # that chunk.
         ws_tokens = surface.split()
-        lemmas: tuple[str, ...] = tuple(
-            _lemmatize_ws_token(ws_token, matcher) for ws_token in ws_tokens
-        )
+        if entry.get("lemma"):
+            # Explicit override, for terms the lemmatizer gets wrong out of
+            # context (e.g. es "prima" -> "primar", ru "вина" -> "вино").
+            lemmas: tuple[str, ...] = tuple(str(entry["lemma"]).split())
+            if len(lemmas) != len(ws_tokens):
+                raise ValueError(
+                    f"{yaml_path}: lemma override {entry['lemma']!r} for {surface!r} "
+                    f"must have one lemma per whitespace token"
+                )
+        else:
+            lemmas = tuple(_lemmatize_ws_token(ws_token, matcher) for ws_token in ws_tokens)
 
         terms.append(Term(
             surface=surface,
@@ -255,5 +267,15 @@ def load_canon(
             notes=notes,
             lemmas=lemmas,
         ))
+
+    # Two terms with the same lemma key would get identical hit lists.
+    seen: dict[tuple[str, ...], str] = {}
+    for t in terms:
+        if t.lemmas in seen:
+            raise ValueError(
+                f"{yaml_path}: {t.surface!r} and {seen[t.lemmas]!r} both lemmatize to "
+                f"{t.lemmas}; add a `lemma:` override to one of them"
+            )
+        seen[t.lemmas] = t.surface
 
     return terms

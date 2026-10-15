@@ -489,13 +489,13 @@ class TestLemmatizeManySpeedup:
     """
 
     def test_spacy_batched_speedup_over_2x(self, en_matcher):
-        """Batching 1000 synthetic sentences through nlp.pipe is >2x faster.
+        """Batching 1000 synthetic sentences through nlp.pipe is faster than a loop.
 
         Generates 1000 short varied sentences, measures wall time for:
           - lemmatize_many (single nlp.pipe-based batched call)
           - equivalent per-sentence lemmatize loop
 
-        Asserts speedup > 2x. This threshold catches a plain per-sentence loop
+        Asserts speedup > 1.25x. This threshold catches a plain per-sentence loop
         masquerading as batched (which gives ~1x) while being achievable on
         modern hardware where nlp.pipe() gives ~2.5x for short sentences.
         """
@@ -529,8 +529,10 @@ class TestLemmatizeManySpeedup:
         t_loop = time.perf_counter() - t0
 
         speedup = t_loop / t_batched
-        assert speedup > 2.0, (
-            f"Expected >2x speedup from lemmatize_many over per-sentence loop, "
+        # 1.25x, not 2x: on a loaded machine real batching measured as low as
+        # 1.6x, while an unbatched loop sits at ~1x.
+        assert speedup > 1.25, (
+            f"Expected >1.25x speedup from lemmatize_many over per-sentence loop, "
             f"got {speedup:.2f}x "
             f"(batched={t_batched:.3f}s, loop={t_loop:.3f}s). "
             f"The implementation may not be truly batched via nlp.pipe(). "
@@ -541,3 +543,17 @@ class TestLemmatizeManySpeedup:
         assert len(batched_results) == len(loop_results)
         for r in batched_results:
             assert isinstance(r, list)
+
+
+def test_pymorphy_strips_punctuation_before_lemmatizing():
+    """pymorphy3 doesn't strip punctuation itself; a term next to a comma,
+    period, quote or bracket must still get its lemma (surface kept intact)."""
+    from phase1_kwic.matchers import PymorphyMatcher
+
+    pairs = PymorphyMatcher().lemmatize("красный, «голубой» Синяя. (чёрный)")
+    assert pairs == [
+        ("красный,", "красный"),
+        ("«голубой»", "голубой"),
+        ("Синяя.", "синий"),
+        ("(чёрный)", "чёрный"),
+    ]

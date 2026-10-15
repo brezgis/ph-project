@@ -19,10 +19,10 @@
 #
 # SHA-256 verification
 # --------------------
-# Expected SHA-256 values are stored in data/fasttext/README.md.
+# Expected SHA-256 values live in the EXPECTED_SHA256 array in this script.
 # If a value is still a TODO placeholder this script computes and PRINTS
 # the actual hash of the downloaded file rather than silently accepting it.
-# Populate the README.md values after the first successful download.
+# Paste them into EXPECTED_SHA256 after the first successful download.
 #
 # Usage
 # -----
@@ -88,8 +88,8 @@ verify_or_print() {
         echo ""
         echo "  *** SHA-256 PLACEHOLDER for $basename ***"
         echo "  Actual sha256: $actual"
-        echo "  Add this line to data/fasttext/README.md:"
-        echo "  | $basename | $actual |"
+        echo "  Add it to EXPECTED_SHA256 in this script:"
+        echo "  [$basename]=$actual"
         echo ""
     else
         if [[ "$actual" == "$expected" ]]; then
@@ -133,7 +133,7 @@ download_file() {
     if command -v wget &>/dev/null; then
         wget --progress=bar:force -O "$download_dest" "$url"
     else
-        curl -L --progress-bar -o "$download_dest" "$url"
+        curl -fL --progress-bar -o "$download_dest" "$url"
     fi
 
     mv "$download_dest" "$dest"
@@ -173,7 +173,7 @@ download_cc() {
     if command -v wget &>/dev/null; then
         wget --progress=bar:force -O "$gz_tmp" "$gz_url"
     else
-        curl -L --progress-bar -o "$gz_tmp" "$gz_url"
+        curl -fL --progress-bar -o "$gz_tmp" "$gz_url"
     fi
 
     # Decompress to .bin (gunzip -c streams to stdout; write atomically via .tmp).
@@ -241,4 +241,4 @@ ls -lh "$ALIGNED_DIR" 2>/dev/null || echo "  (empty)"
 
 echo ""
 echo "If any SHA-256 values above say 'PLACEHOLDER', copy them into"
-echo "data/fasttext/README.md and commit the update."
+echo "the EXPECTED_SHA256 array at the top of this script and commit the update."

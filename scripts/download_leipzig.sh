@@ -209,7 +209,7 @@ download_corpus() {
         if command -v wget &>/dev/null; then
             wget --progress=bar:force -O "$tarball_tmp" "$tarball_url"
         else
-            curl -L --progress-bar -o "$tarball_tmp" "$tarball_url"
+            curl -fL --progress-bar -o "$tarball_tmp" "$tarball_url"
         fi
 
         mv "$tarball_tmp" "$tarball_dest"

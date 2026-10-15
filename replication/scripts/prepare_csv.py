@@ -82,7 +82,8 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for split in SPLITS:
-        df = build_split(split, args.max_per_class, args.seed + hash(split) % 10_000)
+        # Not hash(split): Python randomizes str hashes per process.
+        df = build_split(split, args.max_per_class, args.seed + SPLITS.index(split))
         out_path = OUT_DIR / f"{split}.csv"
         df.to_csv(out_path, index=False)
         n_h = (df.labels == 0).sum()

@@ -79,10 +79,15 @@ def test_bash_syntax():
 
 
 def test_gitignore_has_leipzig_entry():
-    """data/leipzig/ must be excluded from git."""
-    text = GITIGNORE.read_text()
-    assert "data/leipzig/" in text, (
-        ".gitignore is missing data/leipzig/ — large corpus files would end up in git"
+    """data/leipzig must be excluded from git, as a directory or a symlink."""
+    import subprocess
+
+    repo = GITIGNORE.parent
+    # Ignoring the entry itself covers everything under it. (Paths inside it
+    # can't be checked when it's a symlink: git refuses to look past one.)
+    r = subprocess.run(["git", "check-ignore", "-q", "--no-index", "data/leipzig"], cwd=repo)
+    assert r.returncode == 0, (
+        ".gitignore doesn't exclude data/leipzig — large corpus files would end up in git"
     )
 
 

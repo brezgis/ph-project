@@ -2,15 +2,15 @@
 
 Computes Wasserstein-2 and bottleneck pairwise distance matrices for every
 (layer, head) ∈ 12×12 across all 3-language color samples and caches the
-results to disk as ``.npz`` files.  This is the overnight CLI job — do NOT
+results to disk as ``.npz`` files.  This is the long CLI job — do NOT
 run inside a notebook.
 
 Usage
 -----
-    # Default overnight run (n_per_term=20, ~17h at n_jobs=-1):
+    # Default run (n_per_term=20, N=680): about an hour per metric at 8 jobs
     python scripts/compute_diagram_distances.py
 
-    # Two-night budget (n_per_term=30, ~38h at n_jobs=-1, N=3000):
+    # Larger sample (n_per_term=30, N=1020): roughly 2.25x the time
     python scripts/compute_diagram_distances.py --n-per-term 30
 
     # Smoke run — verifies pipeline with tiny settings (seconds):
@@ -36,8 +36,10 @@ On 24 cores this is optimal.  If memory pressure is a concern, reduce n_jobs
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import pathlib
+import re
 import sys
 import time
 
@@ -51,7 +53,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from replication.diagram_distances import (
+from attention_topology.diagram_distances import (
     load_lang_barcodes,
     subsample_per_term,
     compute_full_distance_tensor,
@@ -76,25 +78,26 @@ logger = logging.getLogger("compute_diagram_distances")
 LANGS = ["en", "ru", "es"]
 DOMAIN = "color"
 MODEL_TAG = "bert-base-multilingual-cased"
-MAX_LEN = 32
+MAX_LEN = 64  # must match max_tokens_amount in the attention notebooks
 N_LAYERS = 12
 
-# Expected sentinel files — one per language (part3 is the last part).
-# Script aborts if any are missing (full ripser run not yet complete).
-_SENTINEL_GLOB = "{lang}_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilingual-cased_part3of3.json"
+# Barcode files are written in parts: <prefix>_part<k>of<K>.json.
+def _barcode_prefix(lang: str) -> str:
+    return f"{lang}_{DOMAIN}_all_heads_12_layers_MAX_LEN_{MAX_LEN}_{MODEL_TAG}"
 
 
 def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
-    """Assert that the 3 expected barcode sentinel files exist (one per lang).
+    """Assert that every language's barcode parts are all present (part K of K).
 
     Aborts with a clear error message if the full ripser run is incomplete.
     """
     missing = []
     for lang in LANGS:
-        sentinel_name = _SENTINEL_GLOB.format(lang=lang)
-        sentinel_path = barcode_dir / sentinel_name
-        if not sentinel_path.exists():
-            missing.append(str(sentinel_path))
+        prefix = _barcode_prefix(lang)
+        parts = sorted(barcode_dir.glob(prefix + "_part*of*.json"))
+        totals = {int(m.group(1)) for p in parts if (m := re.search(r"of(\d+)\.json$", p.name))}
+        if len(totals) != 1 or len(parts) != next(iter(totals)):
+            missing.append(f"{barcode_dir / prefix}_part*of*.json (found {len(parts)} part file(s))")
 
     if missing:
         logger.error(
@@ -105,7 +108,7 @@ def _check_sentinel_files(barcode_dir: pathlib.Path) -> None:
         )
         sys.exit(1)
 
-    logger.info("Pre-flight check passed — all 3 sentinel files present.")
+    logger.info("Pre-flight check passed — all barcode parts present for %s.", ", ".join(LANGS))
 
 
 def _load_combined_barcodes(
@@ -113,7 +116,7 @@ def _load_combined_barcodes(
     n_per_term: int,
     seed: int,
 ) -> tuple[dict, np.ndarray, pd.DataFrame]:
-    """Load en/ru/es color barcodes, concatenate, and subsample.
+    """Load en/ru/es barcodes for DOMAIN, concatenate, and subsample.
 
     Returns
     -------
@@ -169,6 +172,38 @@ def _load_combined_barcodes(
     return all_diagrams, sample_indices, combined_metadata
 
 
+def _check_cache_matches(
+    path: pathlib.Path, shape: tuple, dims: tuple, metadata: pd.DataFrame
+) -> None:
+    """Refuse to reuse a cached tensor computed for different settings.
+
+    Reads only the npz header, homology dims and sample metadata, not the
+    (multi-GB) tensor itself.
+    """
+    import zipfile
+
+    with zipfile.ZipFile(path) as zf:
+        with zf.open("tensor.npy") as f:
+            version = np.lib.format.read_magic(f)
+            cached_shape = np.lib.format._read_array_header(f, version)[0]
+    with np.load(path) as npz:
+        cached_dims = tuple(int(d) for d in npz["homology_dimensions"])
+        cached_meta = bytes(npz["metadata_json"]).decode("utf-8")
+    problems = []
+    if tuple(cached_shape) != tuple(shape):
+        problems.append(f"shape {tuple(cached_shape)} != expected {tuple(shape)}")
+    if cached_dims != tuple(dims):
+        problems.append(f"homology dims {cached_dims} != requested {tuple(dims)}")
+    if json.loads(cached_meta) != json.loads(metadata.to_json(orient="records")):
+        problems.append("sampled sentences differ (different --seed, --n-per-term or barcodes?)")
+    if problems:
+        raise SystemExit(
+            f"Cache at {path} was computed with different settings: "
+            + "; ".join(problems)
+            + ". Re-run with --force to recompute, or use another --cache-dir."
+        )
+
+
 def _compute_and_cache(
     all_diagrams: dict,
     sample_indices: np.ndarray,
@@ -184,14 +219,18 @@ def _compute_and_cache(
     """Compute and cache one metric tensor."""
     path = cache_path(cache_dir, metric)
 
-    if path.exists() and not force:
-        logger.info("Skipping %s — cache exists at %s (use --force to recompute)", metric, path)
-        return
-
     n = len(sample_indices)
     n_l = len(list(layers))
     n_h = len(list(heads))
     n_d = len(dims)
+
+    if path.exists() and not force:
+        _check_cache_matches(
+            path, (n_l, n_h, n, n, n_d), dims,
+            combined_metadata.iloc[sample_indices].reset_index(drop=True),
+        )
+        logger.info("Skipping %s — cache exists at %s (use --force to recompute)", metric, path)
+        return
     size_mb = n_l * n_h * n * n * n_d * 4 / 1e6
     logger.info(
         "Computing %s tensor: shape (%d, %d, %d, %d, %d) ≈ %.0f MB ...",
@@ -234,8 +273,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cache-dir",
         type=pathlib.Path,
-        default=pathlib.Path("data/phase3/diagram_distances"),
-        help="Directory to write cached distance tensors (default: data/phase3/diagram_distances).",
+        default=None,
+        help="Directory to write cached distance tensors (default: data/phase3/diagram_distances, "
+             "or data/phase3/diagram_distances/<domain> for domains other than color).",
+    )
+    parser.add_argument(
+        "--domain",
+        default="color",
+        help="Term domain to compute distances for: color, or adjective (the control set).",
     )
     parser.add_argument(
         "--n-per-term",
@@ -243,8 +288,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         metavar="N",
         help=(
-            "Samples per (lang, term) to include. Default 20 (~17h overnight at n_jobs=-1). "
-            "For a two-night budget use --n-per-term 30 (~38h, N=3000 total per metric tensor)."
+            "Samples per (lang, term) to include. Default 20 (N=680; about an hour per metric "
+            "at 8 jobs). Time grows with N squared."
         ),
     )
     parser.add_argument(
@@ -288,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Smoke-test mode: n_per_term=5, single (layer=0, head=0), single metric=wasserstein. "
-            "Completes in seconds to verify the pipeline works before launching the full overnight run."
+            "Completes in seconds to verify the pipeline works before launching the full run."
         ),
     )
     return parser
@@ -298,11 +343,21 @@ def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    global DOMAIN
+    DOMAIN = args.domain
+    if args.cache_dir is None:
+        args.cache_dir = pathlib.Path("data/phase3/diagram_distances")
+        if DOMAIN != "color":
+            args.cache_dir = args.cache_dir / DOMAIN
+
     # Apply smoke-mode overrides
     if args.smoke:
         logger.info("Smoke mode active — overriding to n_per_term=5, layer=0/head=0, metric=wasserstein.")
         args.n_per_term = 5
         args.metrics = "wasserstein"
+        # Keep smoke output away from the real cache, which a later full run
+        # would otherwise find and skip over.
+        args.cache_dir = args.cache_dir / "smoke"
         layers_range = range(1)
         heads_range = range(1)
     else:
@@ -326,11 +381,10 @@ def main(argv: list[str] | None = None) -> None:
     else:
         logger.info("Smoke mode: skipping sentinel file check (may be partial data).")
         # Verify at least en part1 exists for smoke
-        en_part1 = args.barcode_dir / (
-            "en_color_all_heads_12_layers_MAX_LEN_32_bert-base-multilingual-cased_part1of3.json"
-        )
-        if not en_part1.exists():
-            logger.error("Smoke mode requires at least en_color_part1of3.json. Not found: %s", en_part1)
+        en_parts = sorted(args.barcode_dir.glob(_barcode_prefix("en") + "_part1of*.json"))
+        en_part1 = en_parts[0] if en_parts else args.barcode_dir / (_barcode_prefix("en") + "_part1of*.json")
+        if not en_parts:
+            logger.error("Smoke mode requires at least the en part1 barcode file. Not found: %s", en_part1)
             sys.exit(1)
 
     # Load + subsample
@@ -372,7 +426,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.smoke:
         # Pair-distance compute scales ~quadratically in N (samples per layer-head).
-        # Smoke fixes n_per_term=5; the default overnight run uses n_per_term=20,
+        # Smoke fixes n_per_term=5; the default run uses n_per_term=20,
         # adding ~(20/5)**2 = 16x on top of the 144 (layer, head) sweep.
         layer_head_factor = 144
         n_scale_for_default = (20 / 5) ** 2

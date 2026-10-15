@@ -1,4 +1,4 @@
-"""Tests for aggregation helpers in replication/diagram_distances.py.
+"""Tests for aggregation helpers in attention_topology/diagram_distances.py.
 
 Covers:
   - rank_heads_by_effect: top_k count, sort order, rank column, passes_bh preserved
@@ -23,7 +23,7 @@ REQUIRE = os.environ.get("PH_REQUIRE_DIAGRAM_DISTANCES") == "1"
 # Conditional import — tests must fail (ImportError) before Phase 2
 # ---------------------------------------------------------------------------
 try:
-    from replication.diagram_distances import (
+    from attention_topology.diagram_distances import (
         rank_heads_by_effect,
         effect_heatmap_data,
     )
@@ -41,7 +41,7 @@ def _skip_or_fail(reason: str) -> None:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import aggregation helpers from replication.diagram_distances — "
+            "Could not import aggregation helpers from attention_topology.diagram_distances — "
             "rank_heads_by_effect and effect_heatmap_data are not yet defined."
         )
 

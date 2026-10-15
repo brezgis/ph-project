@@ -1,0 +1,3 @@
+[submodule "vendor/tda4atd"]
+	path = vendor/tda4atd
+	url = https://github.com/danchern97/tda4atd.git

@@ -42,17 +42,20 @@ class TestValidation:
         with pytest.raises(ValueError, match="lang"):
             load_fasttext("de", "cc")
 
-    def test_valid_langs_are_en_ru_es(self):
+    def test_valid_langs_are_en_ru_es(self, tmp_path, monkeypatch):
         """load_fasttext should accept exactly en, ru, es — no TypeError."""
         from baselines.vectors import load_fasttext
-        # We just verify that valid lang/kind don't raise ValueError; the actual
-        # file will be missing so we expect FileNotFoundError (not ValueError).
+        # Valid lang/kind must get past validation; pointed at an empty data
+        # dir, that shows up as FileNotFoundError (not ValueError) instead of
+        # loading 7 GB models when the real vectors are present.
+        monkeypatch.setenv("FASTTEXT_DATA_DIR", str(tmp_path))
         for lang in ("en", "ru", "es"):
             with pytest.raises((FileNotFoundError, OSError)):
                 load_fasttext(lang, "cc")
 
-    def test_valid_kinds_are_cc_and_aligned(self):
+    def test_valid_kinds_are_cc_and_aligned(self, tmp_path, monkeypatch):
         from baselines.vectors import load_fasttext
+        monkeypatch.setenv("FASTTEXT_DATA_DIR", str(tmp_path))
         for kind in ("cc", "aligned"):
             with pytest.raises((FileNotFoundError, OSError)):
                 load_fasttext("en", kind)

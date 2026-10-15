@@ -1,0 +1,63 @@
+[project]
+name = "topology-of-color"
+version = "0.1.0"
+description = "Cross-linguistic color category structure in mBERT attention, measured with persistent homology"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # models
+    "torch>=2.7",
+    "transformers>=4.40",
+    "tokenizers",
+    # topology
+    "ripser==0.6.14",
+    "giotto-tda",
+    "networkx",
+    # distributional semantics (fastText baselines)
+    "gensim==4.4.0",
+    # stats, data, plots
+    "numpy<2",
+    "scipy",
+    "scikit-learn",
+    "pandas",
+    "pyarrow",
+    "matplotlib",
+    "seaborn",
+    "pyyaml",
+    "tqdm",
+    # KWIC extraction: lemma matching (spaCy for en/es, pymorphy3 for ru)
+    "spacy>=3.8,<3.9",
+    "pymorphy3",
+    "en-core-web-md",
+    "es-core-news-md",
+]
+
+[project.optional-dependencies]
+# GPU ripser used by the Kushnareva pipeline. Builds from source: needs nvcc
+# and a CUDA toolkit matching torch's CUDA major version.
+gpu = ["ripserplusplus"]
+
+[dependency-groups]
+dev = ["pytest", "jupyterlab", "ipykernel"]
+
+[tool.uv]
+package = false            # a research repo, not an installable library
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+# The PyPI release (1.1.2) doesn't compile against CUDA 12+; upstream master has
+# the fix but was never re-released, so pin the fixed commit.
+ripserplusplus = { git = "https://github.com/simonzhang00/ripser-plusplus.git", rev = "30243c0c752de26d7fdf6e41f08bf7b840ca4744" }
+en-core-web-md = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl" }
+es-core-news-md = { url = "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.8.0/es_core_news_md-3.8.0-py3-none-any.whl" }
+
+# CUDA 12.8 builds: the first to support Blackwell GPUs (RTX 50xx).
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

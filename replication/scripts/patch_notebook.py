@@ -6,7 +6,8 @@ Supports three notebooks:
 - features_calculation_ripser_and_templates.ipynb
 
 Edits for all notebooks:
-1. Prepend a setup cell that adds reference/ and replication/ to sys.path
+1. Prepend a setup cell that adds vendor/tda4atd/, replication/ and
+   attention_topology/ to sys.path
    and monkey-patches networkx.from_numpy_matrix for networkx 3.x compat.
 
 Edits for features_calculation_by_thresholds.ipynb only:
@@ -57,16 +58,22 @@ SETUP_CELL_MARKER = "# replication setup — added by patch_notebook.py"
 SETUP_CELL_SOURCE = f"""{SETUP_CELL_MARKER}
 import os, sys
 _HERE = os.path.abspath(os.getcwd())
-for p in (os.path.abspath(os.path.join(_HERE, "..", "..", "reference")),
-          os.path.abspath(os.path.join(_HERE, ".."))):
+for p in (os.path.abspath(os.path.join(_HERE, "..", "..", "vendor", "tda4atd")),
+          os.path.abspath(os.path.join(_HERE, "..")),
+          os.path.abspath(os.path.join(_HERE, "..", "..", "attention_topology"))):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-# networkx 3.x removed from_numpy_matrix; reference/stats_count.py still calls it.
+# networkx 3.x removed from_numpy_matrix; vendor/tda4atd/stats_count.py still calls it.
 # Behavior of from_numpy_array on a 2D ndarray matches the old from_numpy_matrix.
 import networkx as _nx
 if not hasattr(_nx, "from_numpy_matrix"):
     _nx.from_numpy_matrix = _nx.from_numpy_array
+
+# NumPy 1.24 removed np.int; vendor/tda4atd/ripser_count.py still uses it.
+import numpy as _np
+if not hasattr(_np, "int"):
+    _np.int = int
 """
 
 # ---------------------------------------------------------------------------

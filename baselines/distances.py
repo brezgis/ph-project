@@ -172,6 +172,12 @@ def extract_term_vectors(
     collected: list[np.ndarray] = []
 
     # Resolve head position for this call
+    # Validate up front: otherwise a typo only surfaces if a multi-word term
+    # happens to be present (never, for the color lists).
+    if strategy not in ("head", "mean", "skip"):
+        raise ValueError(f"Unknown strategy={strategy!r}. Must be 'head', 'mean' or 'skip'.")
+    if head_position not in (None, "left", "right"):
+        raise ValueError(f"head_position must be 'left', 'right' or None, got {head_position!r}.")
     if head_position is not None:
         _head_pos = head_position
     elif lang in HEAD_POSITION:

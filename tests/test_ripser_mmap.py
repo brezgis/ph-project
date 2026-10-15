@@ -99,6 +99,63 @@ def test_start_method_is_not_spawn():
 # ---------------------------------------------------------------------------
 
 
+def _scenario_new_pattern(path: str) -> tuple[float, int]:
+    """NEW pattern: a fork()ed child mmap-loads its slice. Returns (peak parent RSS growth MB, checksum)."""
+    indices = [1, 2, 3]
+    proc = psutil.Process(os.getpid())
+    rss_before = proc.memory_info().rss
+    q = Queue()
+    p = Process(target=_load_slice_checksum, args=(q, path, indices))
+    p.start()
+    peak = proc.memory_info().rss
+    result = q.get()
+    p.join()
+    p.close()
+    peak = max(peak, proc.memory_info().rss)
+    return (peak - rss_before) / (1024 * 1024), result
+
+
+def _scenario_old_pattern(path: str) -> float:
+    """OLD pattern: parent loads the full array and makes 20 fancy-index copies,
+    one per child. Returns peak parent RSS growth in MB (measured while the
+    children run, which is when the real pipeline ran out of memory)."""
+    n_samples = 50_000
+    number_of_splits = 20
+    proc = psutil.Process(os.getpid())
+    rss_before = proc.memory_info().rss
+    loaded = np.load(path, allow_pickle=True)
+    split_ids = np.array_split(np.arange(n_samples), number_of_splits)
+    q = Queue()
+    peak = proc.memory_info().rss
+    for ids in split_ids:
+        chunk = loaded[ids]  # fancy-index copy materialised in parent
+        p = Process(target=_old_pattern_worker, args=(q, chunk))
+        p.start()
+        peak = max(peak, proc.memory_info().rss)
+        q.get()
+        p.join()
+        p.close()
+    del loaded
+    return (peak - rss_before) / (1024 * 1024)
+
+
+def _in_fresh_interpreter(scenario, *args):
+    """Run a scenario in a newly spawned interpreter so RSS is measured from a
+    clean heap. In-process, memory freed by earlier tests gets reused and the
+    growth never shows up in RSS, which made these checks order-dependent."""
+    ctx = mp.get_context("spawn")
+    q = ctx.Queue()
+    p = ctx.Process(target=_report, args=(q, scenario, args))  # not a Pool: its workers can't fork
+    p.start()
+    out = q.get(timeout=120)  # fail, don't hang, if the child dies
+    p.join()
+    return out
+
+
+def _report(queue, scenario, args) -> None:
+    queue.put(scenario(*args))
+
+
 def test_child_mmap_load_does_not_bloat_parent_rss(tmp_path):
     """Parent RSS growth after a fork()ed child completes must stay < 10 MB.
 
@@ -112,26 +169,10 @@ def test_child_mmap_load_does_not_bloat_parent_rss(tmp_path):
     complementary check that confirms the threshold is actually meaningful.
     """
     path, arr = _make_fixture_npy(tmp_path)
-    indices = [1, 2, 3]
-
-    proc = psutil.Process(os.getpid())
-    rss_before = proc.memory_info().rss
-
-    q = Queue()
-    p = Process(target=_load_slice_checksum, args=(q, str(path), indices))
-    p.start()
-    result = q.get()
-    p.join()
-    p.close()
-
-    rss_after = proc.memory_info().rss
-    rss_delta_mb = (rss_after - rss_before) / (1024 * 1024)
-
+    rss_delta_mb, result = _in_fresh_interpreter(_scenario_new_pattern, str(path))
     assert rss_delta_mb < _RSS_THRESHOLD_MB, (
         f"Parent RSS grew by {rss_delta_mb:.1f} MB after child completed. "
-        f"Expected < {_RSS_THRESHOLD_MB} MB — this suggests the parent is loading array data. "
-        f"RSS before: {rss_before / 1024**2:.1f} MB, "
-        f"RSS after: {rss_after / 1024**2:.1f} MB"
+        f"Expected < {_RSS_THRESHOLD_MB} MB — this suggests the parent is loading array data."
     )
 
 
@@ -147,34 +188,12 @@ def test_old_pattern_does_bloat_parent_rss(tmp_path):
     child Process.  With the ~25 MB fixture this adds ~27 MB to parent RSS.
     """
     path, _arr = _make_fixture_npy(tmp_path)
-    n_samples = 50_000
-    number_of_splits = 20
-
-    proc = psutil.Process(os.getpid())
-    rss_before = proc.memory_info().rss
-
-    # Simulate old broken pattern: parent loads the full array, then slices
-    loaded = np.load(str(path), allow_pickle=True)
-    split_ids = np.array_split(np.arange(n_samples), number_of_splits)
-    q = Queue()
-    for ids in split_ids:
-        chunk = loaded[ids]  # fancy-index copy materialised in parent
-        p = Process(target=_old_pattern_worker, args=(q, chunk))
-        p.start()
-        q.get()
-        p.join()
-        p.close()
-    del loaded
-
-    rss_after = proc.memory_info().rss
-    rss_delta_mb = (rss_after - rss_before) / (1024 * 1024)
+    rss_delta_mb = _in_fresh_interpreter(_scenario_old_pattern, str(path))
 
     assert rss_delta_mb > _RSS_THRESHOLD_MB, (
         f"OLD pattern only grew parent RSS by {rss_delta_mb:.1f} MB — "
         f"expected > {_RSS_THRESHOLD_MB} MB. The fixture may be too small "
-        f"to make test_child_mmap_load_does_not_bloat_parent_rss meaningful. "
-        f"RSS before: {rss_before / 1024**2:.1f} MB, "
-        f"RSS after: {rss_after / 1024**2:.1f} MB"
+        f"to make test_child_mmap_load_does_not_bloat_parent_rss meaningful."
     )
 
 

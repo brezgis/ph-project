@@ -4,7 +4,7 @@ topology — persistent homology pipeline for the static-embedding baselines.
 Wraps Ripser (via ripser or ripserplusplus) to compute Vietoris–Rips barcodes
 from distance matrices, then extracts the Kushnareva-style feature vector.
 
-Feature-name convention (mirrors reference/ripser_count.py)
+Feature-name convention (mirrors vendor/tda4atd/ripser_count.py)
 ------------------------------------------------------------
 Format: ``h{dim}_{type}_{args}``
 
@@ -49,10 +49,10 @@ import numpy as np
 import ripser
 
 
-# Structured dtype used for all barcode arrays (mirrors reference/ripser_count.py).
+# Structured dtype used for all barcode arrays (mirrors vendor/tda4atd/ripser_count.py).
 _BARCODE_DTYPE = np.dtype([("birth", "f8"), ("death", "f8")])
 
-# Thresholds for the n-type features (matches reference/ripser_count.py usage).
+# Thresholds for the n-type features (matches vendor/tda4atd/ripser_count.py usage).
 _THRESHOLDS = (0.25, 0.5, 0.75)
 
 
@@ -61,7 +61,7 @@ def rips_barcode(D: np.ndarray, max_dim: int = 1) -> dict:
 
     Infinite bars (the single H0 bar that never dies) are stripped before
     returning, mirroring the ``barcode_pop_inf`` step in
-    ``reference/ripser_count.py``.
+    ``vendor/tda4atd/ripser_count.py``.
 
     Parameters
     ----------
@@ -81,7 +81,7 @@ def rips_barcode(D: np.ndarray, max_dim: int = 1) -> dict:
         Per ssa.5, each value is a NumPy **structured array** with
         ``'birth'`` and ``'death'`` float fields so that downstream code
         can index by name (``barcode[dim]['death']``) exactly like
-        ``reference/ripser_count.py``.  Infinite bars are already removed.
+        ``vendor/tda4atd/ripser_count.py``.  Infinite bars are already removed.
         Implementations that wrap the ``ripser`` package (which returns
         plain ``(n, 2)`` arrays via ``result['dgms']``) must convert to
         the structured-array layout before returning.
@@ -153,7 +153,7 @@ def rips_barcode(D: np.ndarray, max_dim: int = 1) -> dict:
 def barcode_features(barcode: dict) -> dict:
     """Extract the Kushnareva-style scalar feature vector from a barcode.
 
-    Feature-name convention mirrors ``reference/ripser_count.py``:
+    Feature-name convention mirrors ``vendor/tda4atd/ripser_count.py``:
     ``h{dim}_{type}_{args}`` — see module docstring for the full spec.
 
     h{d}_v computes std (not variance), matching Kushnareva naming.
@@ -177,9 +177,9 @@ def barcode_features(barcode: dict) -> dict:
     -----
     ``h{d}_v`` computes std (not variance), matching Kushnareva naming.
     The letter ``v`` is preserved for parity with
-    ``reference/ripser_count.py::barcode_std``; do not silently rename.
+    ``vendor/tda4atd/ripser_count.py::barcode_std``; do not silently rename.
 
-    Feature semantics (see reference/ripser_count.py for the authoritative
+    Feature semantics (see vendor/tda4atd/ripser_count.py for the authoritative
     implementation):
 
     * ``*_s``  — sum of (death − birth) across all finite bars.

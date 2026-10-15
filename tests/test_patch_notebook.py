@@ -26,9 +26,9 @@ THRESHOLD_NB = REPO_ROOT / "replication" / "notebooks" / "features_calculation_b
 PREDICTION_NB = REPO_ROOT / "replication" / "notebooks" / "features_prediction.ipynb"
 RIPSER_NB = REPO_ROOT / "replication" / "notebooks" / "features_calculation_ripser_and_templates.ipynb"
 # reference/ notebooks are the frozen originals — always unpatched.
-REF_PREDICTION_NB = REPO_ROOT / "reference" / "features_prediction.ipynb"
-REF_THRESHOLD_NB = REPO_ROOT / "reference" / "features_calculation_by_thresholds.ipynb"
-REF_RIPSER_NB = REPO_ROOT / "reference" / "features_calculation_ripser_and_templates.ipynb"
+REF_PREDICTION_NB = REPO_ROOT / "vendor" / "tda4atd" / "features_prediction.ipynb"
+REF_THRESHOLD_NB = REPO_ROOT / "vendor" / "tda4atd" / "features_calculation_by_thresholds.ipynb"
+REF_RIPSER_NB = REPO_ROOT / "vendor" / "tda4atd" / "features_calculation_ripser_and_templates.ipynb"
 
 
 def _load_nb(path: Path) -> nbformat.NotebookNode:

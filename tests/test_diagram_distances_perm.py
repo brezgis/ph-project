@@ -1,4 +1,4 @@
-"""Tests for permutation-test helpers in replication/diagram_distances.py.
+"""Tests for permutation-test helpers in attention_topology/diagram_distances.py.
 
 Covers:
   - per_domain_test_statistic: correct between-vs-within statistic
@@ -33,7 +33,7 @@ pytestmark_slow = pytest.mark.skipif(
 # Conditional import — tests fail on missing production code in Phase 1
 # ---------------------------------------------------------------------------
 try:
-    from replication.diagram_distances import (
+    from attention_topology.diagram_distances import (
         per_domain_test_statistic,
         permutation_test_per_domain,
         permutation_test_per_head,
@@ -44,7 +44,7 @@ except ImportError:
     _IMPORT_OK = False
 
 try:
-    from replication.diagram_distances import _per_domain_test_statistic_from_arrays
+    from attention_topology.diagram_distances import _per_domain_test_statistic_from_arrays
     _VECTORIZED_IMPORT_OK = True
 except ImportError:
     _VECTORIZED_IMPORT_OK = False
@@ -59,7 +59,7 @@ def _skip_or_fail(reason: str) -> None:
 def _require_import():
     if not _IMPORT_OK:
         pytest.fail(
-            "Could not import permutation helpers from replication.diagram_distances — "
+            "Could not import permutation helpers from attention_topology.diagram_distances — "
             "per_domain_test_statistic, permutation_test_per_domain, "
             "permutation_test_per_head, _bh_correction are not yet defined."
         )
@@ -593,7 +593,7 @@ class TestPerDomainArrayHelper:
         if not _VECTORIZED_IMPORT_OK:
             pytest.fail(
                 "_per_domain_test_statistic_from_arrays is not yet defined in "
-                "replication.diagram_distances — needed for vectorized inner loop."
+                "attention_topology.diagram_distances — needed for vectorized inner loop."
             )
 
     def test_matches_public_api(self):
@@ -846,7 +846,7 @@ class TestVectorizedEquivalence:
         """
         _require_import()
         try:
-            from replication.diagram_distances import permutation_test_per_domain as ptpd
+            from attention_topology.diagram_distances import permutation_test_per_domain as ptpd
         except ImportError:
             pytest.fail("permutation_test_per_domain not importable")
 
@@ -891,7 +891,7 @@ class TestVectorizedEquivalence:
         """
         _require_import()
         try:
-            from replication.diagram_distances import permutation_test_per_domain as ptpd
+            from attention_topology.diagram_distances import permutation_test_per_domain as ptpd
         except ImportError:
             pytest.fail("permutation_test_per_domain not importable")
 

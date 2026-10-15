@@ -24,5 +24,5 @@ import baselines
 # without reaching into baselines directly.
 SUPPORTED_LANGUAGES = baselines.SUPPORTED_LANGUAGES
 
-# The three semantic domains covered by the Phase 1 KWIC extraction.
-DOMAINS: frozenset[str] = frozenset({"color", "emotion", "kinship"})
+# Semantic domains covered by the KWIC extraction (adjective = the control set).
+DOMAINS: frozenset[str] = frozenset({"color", "emotion", "kinship", "adjective"})

@@ -1,7 +1,8 @@
 # Canon term list schema
 
 Each file lives at `canon-terms/<lang>/<domain>.yaml` where `<lang>` is one of
-`en`, `ru`, `es` and `<domain>` is one of `color`, `emotion`, `kinship`.
+`en`, `ru`, `es` and `<domain>` is one of `color`, `emotion`, `kinship`, `adjective`
+(the control set for the color analysis).
 
 Every term must trace to a specific publication. Deviations from cited sources
 must be named and justified.
@@ -9,7 +10,7 @@ must be named and justified.
 ## Schema
 
 ```yaml
-domain: <color|emotion|kinship>
+domain: <color|emotion|kinship|adjective>
 language: <en|ru|es>
 description: >
   One-paragraph prose statement of what this inventory is and how it was
@@ -25,6 +26,8 @@ terms:
     gloss: "<English gloss>"            # optional for en, required for ru/es
     source: "Author Year"               # which cited source licenses this term
     notes: "optional — any caveat, register, or morphological note"
+    lemma: "<lemma>"                    # optional override, when the lemmatizer gets the bare
+                                        # term wrong (e.g. es "prima" -> "primar"); one per word
 deviations:
   - item: "<what was changed>"
     from: "<what the source said>"
