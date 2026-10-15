@@ -1,4 +1,4 @@
-# Topology of Color
+# Language-Specific Loop Structure in mBERT Attention Graphs
 
 Does a language's color vocabulary leave a trace in the *shape* of a multilingual
 transformer's attention?
@@ -9,9 +9,10 @@ shades apart (Winawer et al. 2007). In this project I treat each mBERT attention
 sentence as a weighted graph, summarize its shape with persistent homology, and ask whether
 those shapes differ by language, and whether the Russian blue split shows up in them.
 
-Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. The paper is
-*Topology of Color: Cross-Linguistic Category Structure in mBERT Attention*
+A Brandeis COSI 115b (Fundamentals of NLP II) course project. The paper is
+*Language-Specific Loop Structure in mBERT Attention Graphs*
 ([PDF](https://brezgis.com/assets/papers/brezgis-topology-of-color.pdf)).
+The feature extraction follows Kushnareva et al. (2021); see below.
 
 ## What I found
 
@@ -47,14 +48,13 @@ Final project for COSI 115b (Fundamentals of NLP II) at Brandeis, Spring 2026. T
   language's sample.
 - **синий and голубой don't separate.** The within-Russian test finds no difference between
   the two blues (permutation p = 0.57–0.97 across metrics).
-- **The translation-triple asymmetry is now only a trend.** {blue, azul, синий} is
+- **The translation-triple asymmetry is only a trend.** {blue, azul, синий} is
   somewhat closer than chance (p = 0.04–0.15 across the four metric/dimension pairs) and
   {blue, azul, голубой} is not (p = 0.34–0.98). That is the direction you'd expect if
   English *blue* lines up with синий, but only one of the four tests is below 0.05
   (p = 0.044), so it doesn't survive correction.
 - Aggregate feature distances still order the languages en–es < ru–es < en–ru.
 
-These replace the numbers in the original course paper; see [What changed after the course](#what-changed-after-the-course).
 Summary tables are in `results/`; the final figures are in `results/figures/final/`
 (regenerate them with `uv run python scripts/make_figures.py`).
 
@@ -125,29 +125,26 @@ with 64 GB of RAM.
 - ru *фиолетовый* reached only 104 sentences (the target was 200) and is kept with a caveat;
   see `canon-terms/ru/color.yaml`.
 
-## What changed after the course
+## Implementation notes
 
-I cleaned up and re-ran the whole pipeline in October 2026. The fixes changed some results,
-so the numbers above differ from the course paper.
-
-- **Russian punctuation.** pymorphy3 doesn't strip punctuation, so a Russian term touching
-  a comma, period, quote or bracket was never matched: 0% of Russian target tokens carried
-  punctuation, against 10.5% in English and 28.6% in Spanish, a systematic context
-  difference between the languages. Punctuation is now stripped before parsing.
-- **Compounds and lemmas.** Hyphenated compounds keep all their parts (en/es *red-haired*
-  used to count as *red*, while Russian compounds never matched); terms can carry an explicit
-  lemma override for words the lemmatizer misreads out of context; and a repeated term in a
-  short sentence no longer drops the second occurrence.
-- **Context length.** The 32-token cap truncated 64% of Russian contexts. The cap is now 64
-  tokens.
-- **A length-matched control.** Even at 64 tokens, Russian contexts are longer; the language
-  test now also runs on a subset matched for length.
+- **Russian punctuation.** pymorphy3 doesn't strip punctuation, so punctuation is stripped
+  before parsing. Otherwise a Russian term touching a comma, period, quote or bracket would
+  never be matched, a systematic context difference between the languages (10.5% of English
+  and 28.6% of Spanish target tokens carry punctuation).
+- **Compounds and lemmas.** Hyphenated compounds keep all their parts, so en/es *red-haired*
+  doesn't count as *red* and Russian compounds match. Terms can carry an explicit lemma
+  override for words the lemmatizer misreads out of context, and a repeated term in a short
+  sentence keeps both occurrences.
+- **Context length.** Contexts are capped at 64 tokens; a 32-token cap would truncate 64% of
+  Russian contexts.
+- **A length-matched control.** Even at 64 tokens, Russian contexts are longer, so the
+  language test also runs on a subset matched for length.
 - **A non-color control.** The same analysis on Dixon's core non-color adjectives, to check
   whether any language effect is specific to color.
-- **Russian stemming.** The term-matching stem rule is now the first three letters with
-  accents folded; it drops one form (*почернее*) on the full corpus.
-- **fastText baselines.** k-means now runs on L2-normalized vectors, matching the cosine
-  silhouette and the rest of the analysis; the baselines were re-run.
+- **Russian stemming.** Term matching uses the first three letters with accents folded; it
+  drops one form (*почернее*) on the full corpus.
+- **fastText baselines.** k-means runs on L2-normalized vectors, matching the cosine
+  silhouette and the rest of the analysis.
 
 ## References
 

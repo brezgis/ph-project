@@ -1,4 +1,4 @@
-"""Figures for the re-run analysis.
+"""Figures for the analysis.
 
 Final paper/web figures (results/figures/final/, PDF + PNG), drawn only from the
 committed CSVs in results/phase3_diagram_distances/ (nothing is recomputed):
